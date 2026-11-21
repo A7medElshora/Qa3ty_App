@@ -1,0 +1,234 @@
+import 'package:qa3ty_app/core/utils/widgets/chips.dart';
+
+enum BookingPaymentStatus {
+  unpaid,
+  depositOnly,
+  partiallyPaid,
+  fullyPaid,
+}
+
+enum BookingLifecycleStatus {
+  tentative,
+  confirmed,
+  completed,
+  cancelled,
+}
+
+class LedgerEntry {
+  final String id;
+  final String bookingId;
+  final String type; // 'deposit', 'payment', 'refund', 'charge'
+  final int amount; // in EGP
+  final DateTime date;
+  final String paymentMethod; // نقداً, تحويل إنستاباي, etc.
+  final String receiverName;
+  final String? note;
+
+  const LedgerEntry({
+    required this.id,
+    required this.bookingId,
+    required this.type,
+    required this.amount,
+    required this.date,
+    required this.paymentMethod,
+    required this.receiverName,
+    this.note,
+  });
+
+  LedgerEntry copyWith({
+    String? id,
+    String? bookingId,
+    String? type,
+    int? amount,
+    DateTime? date,
+    String? paymentMethod,
+    String? receiverName,
+    String? note,
+  }) {
+    return LedgerEntry(
+      id: id ?? this.id,
+      bookingId: bookingId ?? this.bookingId,
+      type: type ?? this.type,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      receiverName: receiverName ?? this.receiverName,
+      note: note ?? this.note,
+    );
+  }
+}
+
+class ServiceItem {
+  final String id;
+  final String name;
+  final int price;
+  final String? note;
+  final BookingServiceStatus status;
+  final bool isCustom;
+
+  const ServiceItem({
+    required this.id,
+    required this.name,
+    required this.price,
+    this.note,
+    required this.status,
+    this.isCustom = false,
+  });
+
+  ServiceItem copyWith({
+    String? id,
+    String? name,
+    int? price,
+    String? note,
+    BookingServiceStatus? status,
+    bool? isCustom,
+  }) {
+    return ServiceItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      price: price ?? this.price,
+      note: note ?? this.note,
+      status: status ?? this.status,
+      isCustom: isCustom ?? this.isCustom,
+    );
+  }
+}
+
+class Booking {
+  final int id; // e.g. 1042
+  final String hallId;
+  final String hallName;
+  final String customerId;
+  final String customerName;
+  final String customerPhone;
+  final String eventType;
+  final DateTime eventDate;
+  final String timeRange;
+  final int seatsCount;
+  final int hallPrice;
+  final List<ServiceItem> services;
+  final List<LedgerEntry> payments;
+  final BookingLifecycleStatus status;
+  final DateTime? dueDate;
+  final String? eventNotes;
+  final String? setupNotes;
+  final String? internalNotes;
+  final String? otherBookingNotice;
+  final int? otherBookingId;
+  final List<String> activityLog;
+  final String? cancellationReason;
+
+  const Booking({
+    required this.id,
+    required this.hallId,
+    required this.hallName,
+    required this.customerId,
+    required this.customerName,
+    required this.customerPhone,
+    required this.eventType,
+    required this.eventDate,
+    required this.timeRange,
+    required this.seatsCount,
+    required this.hallPrice,
+    required this.services,
+    required this.payments,
+    this.status = BookingLifecycleStatus.confirmed,
+    this.dueDate,
+    this.eventNotes,
+    this.setupNotes,
+    this.internalNotes,
+    this.otherBookingNotice,
+    this.otherBookingId,
+    this.activityLog = const [],
+    this.cancellationReason,
+  });
+
+  /// Total services booked (only status == booked count into total charges)
+  int get bookedServicesTotal {
+    return services
+        .where((s) => s.status == BookingServiceStatus.booked)
+        .fold(0, (sum, s) => sum + s.price);
+  }
+
+  /// Total charges = hall price + booked services
+  int get totalAmount => hallPrice + bookedServicesTotal;
+
+  /// Total payments recorded
+  int get paidAmount {
+    return payments
+        .where((p) => p.type == 'payment' || p.type == 'deposit')
+        .fold(0, (sum, p) => sum + p.amount);
+  }
+
+  /// Remaining amount = charges - payments
+  int get remainingAmount {
+    final remaining = totalAmount - paidAmount;
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  /// Progress ratio
+  double get paymentProgress {
+    if (totalAmount <= 0) return 1.0;
+    return (paidAmount / totalAmount).clamp(0.0, 1.0);
+  }
+
+  /// Payment status computed dynamically
+  BookingPaymentStatus get paymentStatus {
+    if (paidAmount <= 0) return BookingPaymentStatus.unpaid;
+    if (paidAmount >= totalAmount) return BookingPaymentStatus.fullyPaid;
+    if (payments.length == 1 && payments.first.type == 'deposit') {
+      return BookingPaymentStatus.depositOnly;
+    }
+    return BookingPaymentStatus.partiallyPaid;
+  }
+
+  Booking copyWith({
+    int? id,
+    String? hallId,
+    String? hallName,
+    String? customerId,
+    String? customerName,
+    String? customerPhone,
+    String? eventType,
+    DateTime? eventDate,
+    String? timeRange,
+    int? seatsCount,
+    int? hallPrice,
+    List<ServiceItem>? services,
+    List<LedgerEntry>? payments,
+    BookingLifecycleStatus? status,
+    DateTime? dueDate,
+    String? eventNotes,
+    String? setupNotes,
+    String? internalNotes,
+    String? otherBookingNotice,
+    int? otherBookingId,
+    List<String>? activityLog,
+    String? cancellationReason,
+  }) {
+    return Booking(
+      id: id ?? this.id,
+      hallId: hallId ?? this.hallId,
+      hallName: hallName ?? this.hallName,
+      customerId: customerId ?? this.customerId,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      eventType: eventType ?? this.eventType,
+      eventDate: eventDate ?? this.eventDate,
+      timeRange: timeRange ?? this.timeRange,
+      seatsCount: seatsCount ?? this.seatsCount,
+      hallPrice: hallPrice ?? this.hallPrice,
+      services: services ?? this.services,
+      payments: payments ?? this.payments,
+      status: status ?? this.status,
+      dueDate: dueDate ?? this.dueDate,
+      eventNotes: eventNotes ?? this.eventNotes,
+      setupNotes: setupNotes ?? this.setupNotes,
+      internalNotes: internalNotes ?? this.internalNotes,
+      otherBookingNotice: otherBookingNotice ?? this.otherBookingNotice,
+      otherBookingId: otherBookingId ?? this.otherBookingId,
+      activityLog: activityLog ?? this.activityLog,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
+    );
+  }
+}

@@ -1,12 +1,10 @@
-import 'package:qa3ty_app/core/export.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:google_fonts/google_fonts.dart';
-
+import 'package:qa3ty_app/core/export.dart';
 import 'core/cubit/internet/internet_cubit.dart';
 
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> navigatorKey = rootNavigatorKey;
 
 class MyApp extends StatelessWidget {
   final AppRouter appRouter;
@@ -25,34 +23,39 @@ class MyApp extends StatelessWidget {
         listener: (context, state) {
           if (state is ConnectedState) {
             ServicesLocator.introAppCubit.initApp();
-
-            // TODO create widget for connected
           }
           if (state is NotConnectedState) {
             showToast(
               msg: 'الانترنت غير مستقر حاليا',
               state: ToastedStates.error,
-              // context: context,
-              // style: ToastificationStyle.flatColored,
             );
-            // TODO create widget for not connected
           }
         },
         child: ScreenUtilInit(
-          designSize: const Size(428, 926),
+          designSize: const Size(390, 844),
           minTextAdapt: true,
           splitScreenMode: true,
-          child: MaterialApp(
+          child: MaterialApp.router(
             debugShowCheckedModeBanner: false,
-            navigatorObservers: [
-              routeLogger,
-            ],
-            title: 'qa3ty_app App',
+            title: 'قاعتي | Qa3aty',
+            locale: const Locale('ar'),
+            routerConfig: AppRouter.router,
+            builder: (context, child) {
+              return Directionality(
+                textDirection: TextDirection.rtl,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             theme: ThemeData(
-              scaffoldBackgroundColor: AppColor.backGroundColor,
-              textTheme: GoogleFonts.cairoTextTheme(),
+              fontFamily: AppTextStyles.fontFamily,
+              scaffoldBackgroundColor: AppColors.background,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: AppColors.primary,
+                primary: AppColors.primary,
+                surface: AppColors.card,
+              ),
+              useMaterial3: true,
             ),
-            onGenerateRoute: appRouter.onGenerateRoute,
           ),
         ),
       ),

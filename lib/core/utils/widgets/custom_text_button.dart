@@ -86,7 +86,7 @@ class CustomTextButton extends StatelessWidget {
       ),
     );
 
-    final TextButtonLoading = SizedBox(
+    final textButtonLoading = SizedBox(
       height: height,
       child: TextButton(
         onPressed: disable ? null : onPressed,
@@ -110,7 +110,7 @@ class CustomTextButton extends StatelessWidget {
     return isLoading
         ? SizedBox(
             height: 45,
-            child: TextButtonLoading,
+            child: textButtonLoading,
           )
         : SizedBox(
             width: width,

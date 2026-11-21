@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-SizedBox verticalSpace(int height) => SizedBox(height: height.h);
+SizedBox verticalSpace(num height) => SizedBox(height: height.toDouble());
 
-SizedBox horizontalSpace(int width) => SizedBox(width: width.w);
+SizedBox horizontalSpace(num width) => SizedBox(width: width.toDouble());
 
-SliverToBoxAdapter sliverVerticalSpace(int height) => SliverToBoxAdapter(
-      child: SizedBox(height: height.h),
+SliverToBoxAdapter sliverVerticalSpace(num height) => SliverToBoxAdapter(
+      child: SizedBox(height: height.toDouble()),
     );
 
-SliverToBoxAdapter sliverHorzintoalSpace(int width) => SliverToBoxAdapter(
-      child: SizedBox(width: width.w),
+SliverToBoxAdapter sliverHorizontalSpace(num width) => SliverToBoxAdapter(
+      child: SizedBox(width: width.toDouble()),
     );
+
+// Alias
+SliverToBoxAdapter sliverHorzintoalSpace(num width) => sliverHorizontalSpace(width);

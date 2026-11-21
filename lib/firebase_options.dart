@@ -53,16 +53,16 @@ class DefaultFirebaseOptions {
     apiKey: 'AIzaSyBYm7atk5QMnKPDUJ86l_HFkiUse0upy9k',
     appId: '1:405478207570:android:c8758d7cac1b8453c2af8b',
     messagingSenderId: '405478207570',
-    projectId: 'structure-f2ce2',
-    storageBucket: 'structure-f2ce2.appspot.com',
+    projectId: 'qa3ty-f2ce2',
+    storageBucket: 'qa3ty-f2ce2.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCvl7nfC63m2grQ6-vyjVvk9MlhOIfglT8',
     appId: '1:405478207570:ios:e7bb9f1a6d9cae29c2af8b',
     messagingSenderId: '405478207570',
-    projectId: 'structure-f2ce2',
-    storageBucket: 'structure-f2ce2.appspot.com',
-    iosBundleId: 'com.touriest.structure',
+    projectId: 'qa3ty-f2ce2',
+    storageBucket: 'qa3ty-f2ce2.appspot.com',
+    iosBundleId: 'com.touriest.qa3ty',
   );
 }

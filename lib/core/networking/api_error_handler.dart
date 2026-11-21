@@ -35,9 +35,6 @@ class ServerFailure extends ApiError {
 
       case DioExceptionType.unknown:
         return ServerFailure('unknown');
-
-      default:
-        return ServerFailure('Opps There was an Error, Please try again');
     }
   }
 
