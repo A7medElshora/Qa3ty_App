@@ -9,6 +9,7 @@ import 'package:qa3ty_app/core/utils/widgets/circle_icon_button.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_buttons.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_bottom_sheet.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_text_field.dart';
+import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../../data/models/worker_model.dart';
 
 class WorkersScreen extends StatefulWidget {
@@ -37,7 +38,8 @@ class _WorkersScreenState extends State<WorkersScreen> {
     });
   }
 
-  int get _totalBalances => _workers.fold(0, (sum, w) => sum + w.currentBalance);
+  int get _totalBalances =>
+      _workers.fold(0, (sum, w) => sum + w.currentBalance);
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +50,16 @@ class _WorkersScreenState extends State<WorkersScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'إدارة شؤون العمال والموظفين',
-                subtitle: 'المستحقات المتبقية: ${AppFormatters.formatMoney(_totalBalances)}',
+                subtitle:
+                    'المستحقات المتبقية: ${AppFormatters.formatMoney(_totalBalances)}',
                 actions: [
                   CircleIconButton.primary(
-                    icon: const Icon(LucideIcons.plus, size: 20, color: AppColors.white),
+                    icon: const Icon(LucideIcons.plus,
+                        size: 20, color: AppColors.white),
                     onTap: _showAddWorkerSheet,
                   ),
                 ],
@@ -62,11 +67,12 @@ class _WorkersScreenState extends State<WorkersScreen> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppListSkeleton(itemCount: 4)
                   : RefreshIndicator(
                       onRefresh: _fetchWorkers,
                       child: ListView.builder(
-                        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 80, top: 8),
+                        padding: const EdgeInsets.only(
+                            left: 16, right: 16, bottom: 80, top: 8),
                         itemCount: _workers.length,
                         itemBuilder: (context, i) {
                           final worker = _workers[i];
@@ -103,18 +109,26 @@ class _WorkersScreenState extends State<WorkersScreen> {
                 children: [
                   Text(worker.name, style: AppTextStyles.cardTitle),
                   const SizedBox(height: 2),
-                  Text('${worker.role} · ${worker.phone}', style: AppTextStyles.muted),
+                  Text('${worker.role} · ${worker.phone}',
+                      style: AppTextStyles.muted),
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  isDaily ? 'أجر يومي: ${AppFormatters.formatMoney(worker.wageRate)}' : 'راتب شهري: ${AppFormatters.formatMoney(worker.wageRate)}',
-                  style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
+                  isDaily
+                      ? 'أجر يومي: ${AppFormatters.formatMoney(worker.wageRate)}'
+                      : 'راتب شهري: ${AppFormatters.formatMoney(worker.wageRate)}',
+                  style: const TextStyle(
+                      fontFamily: AppTextStyles.fontFamily,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary),
                 ),
               ),
             ],
@@ -123,12 +137,27 @@ class _WorkersScreenState extends State<WorkersScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('أيام الحضور: ${worker.daysWorked.toArabicDigits()} يوم', style: AppTextStyles.body),
+              Text('أيام الحضور: ${worker.daysWorked.toArabicDigits()} يوم',
+                  style: AppTextStyles.body),
               Text(
                 'المستحق: ${AppFormatters.formatMoney(worker.currentBalance)}',
-                style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.amberText),
+                style: const TextStyle(
+                    fontFamily: AppTextStyles.fontFamily,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.amberText),
               ),
             ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'إجمالي الرواتب المصروفة: ${AppFormatters.formatMoney(worker.totalPaid)}',
+            style: const TextStyle(
+              fontFamily: AppTextStyles.fontFamily,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.green,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -172,7 +201,10 @@ class _WorkersScreenState extends State<WorkersScreen> {
             const SizedBox(height: 10),
             AppTextField(label: 'المسمى الوظيفي / الدور', controller: roleCtrl),
             const SizedBox(height: 10),
-            AppTextField(label: 'رقم الهاتف', controller: phoneCtrl, keyboardType: TextInputType.phone),
+            AppTextField(
+                label: 'رقم الهاتف',
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -180,21 +212,32 @@ class _WorkersScreenState extends State<WorkersScreen> {
                   label: const Text('يومي'),
                   selected: wageType == WageType.daily,
                   selectedColor: AppColors.primary,
-                  labelStyle: TextStyle(color: wageType == WageType.daily ? Colors.white : AppColors.ink),
-                  onSelected: (val) => setSheetState(() => wageType = WageType.daily),
+                  labelStyle: TextStyle(
+                      color: wageType == WageType.daily
+                          ? Colors.white
+                          : AppColors.ink),
+                  onSelected: (val) =>
+                      setSheetState(() => wageType = WageType.daily),
                 ),
                 const SizedBox(width: 10),
                 ChoiceChip(
                   label: const Text('شهري'),
                   selected: wageType == WageType.monthly,
                   selectedColor: AppColors.primary,
-                  labelStyle: TextStyle(color: wageType == WageType.monthly ? Colors.white : AppColors.ink),
-                  onSelected: (val) => setSheetState(() => wageType = WageType.monthly),
+                  labelStyle: TextStyle(
+                      color: wageType == WageType.monthly
+                          ? Colors.white
+                          : AppColors.ink),
+                  onSelected: (val) =>
+                      setSheetState(() => wageType = WageType.monthly),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            AppTextField(label: 'معدل الأجر (ج.م)', controller: rateCtrl, keyboardType: TextInputType.number),
+            AppTextField(
+                label: 'معدل الأجر (ج.م)',
+                controller: rateCtrl,
+                keyboardType: TextInputType.number),
             const SizedBox(height: 16),
             AppPrimaryButton(
               text: 'حفظ العامل',
@@ -225,21 +268,27 @@ class _WorkersScreenState extends State<WorkersScreen> {
   }
 
   void _showPayoutDialog(Worker worker) {
-    final amountCtrl = TextEditingController(text: worker.currentBalance.toString());
+    final amountCtrl =
+        TextEditingController(text: worker.currentBalance.toString());
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('صرف مستحقات: ${worker.name}', style: AppTextStyles.cardTitle),
+        title:
+            Text('صرف مستحقات: ${worker.name}', style: AppTextStyles.cardTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AppTextField(label: 'المبلغ المسدد (ج.م)', controller: amountCtrl, keyboardType: TextInputType.number),
+            AppTextField(
+                label: 'المبلغ المسدد (ج.م)',
+                controller: amountCtrl,
+                keyboardType: TextInputType.number),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
@@ -260,7 +309,8 @@ class _WorkersScreenState extends State<WorkersScreen> {
                 _fetchWorkers();
               }
             },
-            child: const Text('تأكيد الصرف', style: TextStyle(color: Colors.white)),
+            child: const Text('تأكيد الصرف',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -277,8 +327,10 @@ class _WorkersScreenState extends State<WorkersScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) => AlertDialog(
           backgroundColor: AppColors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('مكافأة أو خصم: ${worker.name}', style: AppTextStyles.cardTitle),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('مكافأة أو خصم: ${worker.name}',
+              style: AppTextStyles.cardTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -288,29 +340,43 @@ class _WorkersScreenState extends State<WorkersScreen> {
                     label: const Text('مكافأة (+)'),
                     selected: type == WorkerTransactionType.bonus,
                     selectedColor: AppColors.green,
-                    labelStyle: TextStyle(color: type == WorkerTransactionType.bonus ? Colors.white : AppColors.ink),
-                    onSelected: (val) => setDlgState(() => type = WorkerTransactionType.bonus),
+                    labelStyle: TextStyle(
+                        color: type == WorkerTransactionType.bonus
+                            ? Colors.white
+                            : AppColors.ink),
+                    onSelected: (val) =>
+                        setDlgState(() => type = WorkerTransactionType.bonus),
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
                     label: const Text('خصم (-)'),
                     selected: type == WorkerTransactionType.deduction,
                     selectedColor: AppColors.red,
-                    labelStyle: TextStyle(color: type == WorkerTransactionType.deduction ? Colors.white : AppColors.ink),
-                    onSelected: (val) => setDlgState(() => type = WorkerTransactionType.deduction),
+                    labelStyle: TextStyle(
+                        color: type == WorkerTransactionType.deduction
+                            ? Colors.white
+                            : AppColors.ink),
+                    onSelected: (val) => setDlgState(
+                        () => type = WorkerTransactionType.deduction),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              AppTextField(label: 'المبلغ (ج.م)', controller: amountCtrl, keyboardType: TextInputType.number),
+              AppTextField(
+                  label: 'المبلغ (ج.م)',
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number),
               const SizedBox(height: 10),
               AppTextField(label: 'السبب / الملاحظة', controller: noteCtrl),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: () async {
                 final amt = int.tryParse(amountCtrl.text.trim()) ?? 0;
                 if (amt > 0) {

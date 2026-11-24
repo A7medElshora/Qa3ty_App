@@ -66,7 +66,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppListSkeleton(itemCount: 4)
                   : _notifications.isEmpty
                       ? const EmptyState(
                           title: 'لا توجد إشعارات جديدة',

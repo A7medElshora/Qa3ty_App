@@ -1,3 +1,7 @@
+import 'package:dio/dio.dart';
+import 'package:qa3ty_app/core/networking/api_exceptions.dart';
+import 'package:qa3ty_app/core/networking/dio_factory.dart';
+
 enum WageType {
   daily, // يومي
   monthly, // شهري
@@ -36,6 +40,7 @@ class Worker {
   final int wageRate; // يومية أو راتب شهري
   final int daysWorked;
   final int currentBalance; // مستحقات متبقية
+  final int totalPaid;
 
   const Worker({
     required this.id,
@@ -46,6 +51,7 @@ class Worker {
     required this.wageRate,
     this.daysWorked = 0,
     this.currentBalance = 0,
+    this.totalPaid = 0,
   });
 
   Worker copyWith({
@@ -57,6 +63,7 @@ class Worker {
     int? wageRate,
     int? daysWorked,
     int? currentBalance,
+    int? totalPaid,
   }) {
     return Worker(
       id: id ?? this.id,
@@ -67,6 +74,7 @@ class Worker {
       wageRate: wageRate ?? this.wageRate,
       daysWorked: daysWorked ?? this.daysWorked,
       currentBalance: currentBalance ?? this.currentBalance,
+      totalPaid: totalPaid ?? this.totalPaid,
     );
   }
 }
@@ -76,6 +84,204 @@ abstract class WorkersRepository {
   Future<void> addWorker(Worker worker);
   Future<void> updateWorker(Worker worker);
   Future<void> recordTransaction(WorkerTransaction transaction);
+}
+
+class RemoteWorkersRepository implements WorkersRepository {
+  final Dio _dio;
+
+  RemoteWorkersRepository([Dio? dio]) : _dio = dio ?? DioFactory.getDio();
+
+  List<Map<String, dynamic>> _extractItems(dynamic responseData) {
+    if (responseData is Map<String, dynamic>) {
+      final data = responseData['data'];
+      if (data is Map<String, dynamic>) {
+        final items = data['items'] ?? data['payments'];
+        if (items is List) {
+          return items.whereType<Map<String, dynamic>>().toList();
+        }
+      } else if (data is List) {
+        return data.whereType<Map<String, dynamic>>().toList();
+      }
+    } else if (responseData is List) {
+      return responseData.whereType<Map<String, dynamic>>().toList();
+    }
+    return [];
+  }
+
+  Future<List<WorkerTransaction>> _getWorkerTransactions(
+      String workerId) async {
+    final response = await _dio.get('/workers/$workerId/payments');
+    final items = _extractItems(response.data);
+    return items.map((item) {
+      final type = switch (item['payment_type']?.toString()) {
+        'salary' => WorkerTransactionType.payment,
+        'bonus' => WorkerTransactionType.bonus,
+        'deduction' => WorkerTransactionType.deduction,
+        final unknown => throw FormatException(
+            'Unsupported worker payment type: $unknown',
+          ),
+      };
+      final dateString =
+          item['payment_date']?.toString() ?? item['created_at']?.toString();
+      final date = DateTime.tryParse(dateString ?? '');
+      if (date == null) {
+        throw const FormatException(
+            'Worker payment has an invalid payment date.');
+      }
+
+      return WorkerTransaction(
+        id: item['id']?.toString() ?? '',
+        workerId: item['worker_id']?.toString() ?? workerId,
+        type: type,
+        amount: (item['amount'] as num?)?.round() ??
+            (throw const FormatException(
+                'Worker payment is missing its amount.')),
+        date: date,
+        note: (item['notes'] ?? item['note'])?.toString(),
+      );
+    }).toList();
+  }
+
+  int _currentBalance({
+    required Map<String, dynamic> item,
+    required WageType wageType,
+    required int wageRate,
+    required int daysWorked,
+    required List<WorkerTransaction> transactions,
+  }) {
+    final now = DateTime.now();
+    final thisMonthTransactions = transactions.where((transaction) =>
+        transaction.date.year == now.year &&
+        transaction.date.month == now.month);
+    final currentMonthTransactions = thisMonthTransactions.toList();
+    final reportedBalance = item['current_balance'];
+    if (reportedBalance is num && currentMonthTransactions.isEmpty) {
+      return reportedBalance.round();
+    }
+
+    var balance =
+        wageType == WageType.monthly ? wageRate : wageRate * daysWorked;
+    for (final transaction in currentMonthTransactions) {
+      switch (transaction.type) {
+        case WorkerTransactionType.payment:
+        case WorkerTransactionType.deduction:
+          balance -= transaction.amount;
+        case WorkerTransactionType.bonus:
+          balance += transaction.amount;
+      }
+    }
+    return balance > 0 ? balance : 0;
+  }
+
+  @override
+  Future<List<Worker>> getWorkers() async {
+    try {
+      final response =
+          await _dio.get('/workers', queryParameters: {'status': 'active'});
+      final rawItems = _extractItems(response.data);
+      return Future.wait(rawItems.map((item) async {
+        final salaryType =
+            item['salary_type']?.toString().toLowerCase() ?? 'monthly';
+        final wageType =
+            salaryType == 'daily' ? WageType.daily : WageType.monthly;
+        final wageRate = (wageType == WageType.daily
+                ? (item['daily_rate'] ?? 0)
+                : (item['fixed_salary'] ?? 0) as num)
+            .round();
+        final workerId = item['id']?.toString() ?? '';
+        final daysWorked = (item['days_worked'] as num?)?.toInt() ?? 0;
+        final transactions = await _getWorkerTransactions(workerId);
+        return Worker(
+          id: workerId,
+          name: item['full_name']?.toString() ?? '',
+          role: item['job_title']?.toString() ?? '',
+          phone: item['phone']?.toString() ?? '',
+          wageType: wageType,
+          wageRate: wageRate,
+          daysWorked: daysWorked,
+          currentBalance: _currentBalance(
+            item: item,
+            wageType: wageType,
+            wageRate: wageRate,
+            daysWorked: daysWorked,
+            transactions: transactions,
+          ),
+          totalPaid: transactions
+              .where((transaction) =>
+                  transaction.type == WorkerTransactionType.payment)
+              .fold(0, (total, transaction) => total + transaction.amount),
+        );
+      }));
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> addWorker(Worker worker) async {
+    try {
+      await _dio.post(
+        '/workers',
+        data: {
+          'full_name': worker.name,
+          'phone': worker.phone,
+          'job_title': worker.role,
+          'salary_type': worker.wageType == WageType.daily ? 'daily' : 'fixed',
+          if (worker.wageType == WageType.daily)
+            'daily_rate': worker.wageRate.toDouble(),
+          if (worker.wageType == WageType.monthly)
+            'fixed_salary': worker.wageRate.toDouble(),
+          'joining_date': DateTime.now().toIso8601String().substring(0, 10),
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> updateWorker(Worker worker) async {
+    try {
+      await _dio.put(
+        '/workers/${worker.id}',
+        data: {
+          'full_name': worker.name,
+          'phone': worker.phone,
+          'job_title': worker.role,
+          'salary_type': worker.wageType == WageType.daily ? 'daily' : 'fixed',
+          if (worker.wageType == WageType.daily)
+            'daily_rate': worker.wageRate.toDouble(),
+          if (worker.wageType == WageType.monthly)
+            'fixed_salary': worker.wageRate.toDouble(),
+        },
+      );
+    } on DioException catch (_) {
+      // Backend does not expose PUT /workers/:id yet per Section 8.12
+    }
+  }
+
+  @override
+  Future<void> recordTransaction(WorkerTransaction transaction) async {
+    try {
+      final pType = transaction.type == WorkerTransactionType.payment
+          ? 'salary'
+          : (transaction.type == WorkerTransactionType.bonus
+              ? 'bonus'
+              : 'deduction');
+      await _dio.post(
+        '/workers/${transaction.workerId}/payments',
+        data: {
+          'amount': transaction.amount.toDouble(),
+          'payment_type': pType,
+          'payment_date': transaction.date.toIso8601String().substring(0, 10),
+          if (transaction.note != null && transaction.note!.isNotEmpty)
+            'notes': transaction.note,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
 }
 
 class MockWorkersRepository implements WorkersRepository {
@@ -149,7 +355,12 @@ class MockWorkersRepository implements WorkersRepository {
       } else if (transaction.type == WorkerTransactionType.deduction) {
         newBalance -= transaction.amount;
       }
-      _workers[idx] = worker.copyWith(currentBalance: newBalance);
+      _workers[idx] = worker.copyWith(
+        currentBalance: newBalance,
+        totalPaid: transaction.type == WorkerTransactionType.payment
+            ? worker.totalPaid + transaction.amount
+            : worker.totalPaid,
+      );
     }
   }
 }

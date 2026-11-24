@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
 
 class NavItemData {
   final IconData icon;
   final String label;
+  final int branchIndex;
   final bool hasBadge;
 
   const NavItemData({
     required this.icon,
     required this.label,
+    required this.branchIndex,
     this.hasBadge = false,
   });
 }
@@ -29,28 +32,34 @@ class AppBottomNav extends StatefulWidget {
   State<AppBottomNav> createState() => _AppBottomNavState();
 }
 
-class _AppBottomNavState extends State<AppBottomNav> with TickerProviderStateMixin {
+class _AppBottomNavState extends State<AppBottomNav>
+    with TickerProviderStateMixin {
   static const List<NavItemData> _items = [
     NavItemData(
       icon: LucideIcons.building2,
       label: 'القاعات',
+      branchIndex: 0,
     ),
     NavItemData(
       icon: LucideIcons.receipt,
       label: 'المصروفات',
+      branchIndex: 1,
     ),
     NavItemData(
       icon: LucideIcons.bell,
       label: 'الإشعارات',
+      branchIndex: 2,
       hasBadge: true,
     ),
     NavItemData(
       icon: LucideIcons.users,
       label: 'العملاء',
+      branchIndex: 3,
     ),
     NavItemData(
       icon: LucideIcons.ellipsis,
       label: 'المزيد',
+      branchIndex: 4,
     ),
   ];
 
@@ -59,6 +68,11 @@ class _AppBottomNavState extends State<AppBottomNav> with TickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final visibleItems = _items
+        .where(
+          (item) => item.branchIndex != 1 || PermissionGuard.canManageExpenses,
+        )
+        .toList();
 
     return Container(
       decoration: const BoxDecoration(
@@ -78,22 +92,25 @@ class _AppBottomNavState extends State<AppBottomNav> with TickerProviderStateMix
         left: 8,
         right: 8,
       ),
-      child: Row(
-        children: List.generate(_items.length, (index) {
-          final item = _items[index];
-          final isSelected = widget.currentIndex == index;
+      child: SizedBox(
+        height: 52,
+        child: Row(
+          children: List.generate(visibleItems.length, (index) {
+            final item = visibleItems[index];
+            final isSelected = widget.currentIndex == item.branchIndex;
 
-          return Expanded(
-            flex: isSelected ? 3 : 2,
-            child: Center(
-              child: _buildAnimatedNavItem(
-                index: index,
-                item: item,
-                isSelected: isSelected,
+            return Expanded(
+              flex: isSelected ? 4 : 2,
+              child: Center(
+                child: _buildAnimatedNavItem(
+                  index: item.branchIndex,
+                  item: item,
+                  isSelected: isSelected,
+                ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -121,7 +138,7 @@ class _AppBottomNavState extends State<AppBottomNav> with TickerProviderStateMix
           duration: const Duration(milliseconds: 320),
           curve: Curves.fastOutSlowIn,
           padding: EdgeInsets.symmetric(
-            horizontal: isSelected ? 14 : 10,
+            horizontal: isSelected ? 10 : 8,
             vertical: 8,
           ),
           decoration: BoxDecoration(
@@ -151,7 +168,8 @@ class _AppBottomNavState extends State<AppBottomNav> with TickerProviderStateMix
                     child: Icon(
                       item.icon,
                       size: 20,
-                      color: isSelected ? AppColors.white : AppColors.tabInactive,
+                      color:
+                          isSelected ? AppColors.white : AppColors.tabInactive,
                     ),
                   ),
                   if (item.hasBadge && !isSelected)
@@ -164,7 +182,8 @@ class _AppBottomNavState extends State<AppBottomNav> with TickerProviderStateMix
                         decoration: BoxDecoration(
                           color: AppColors.red,
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.white, width: 1.2),
+                          border:
+                              Border.all(color: AppColors.white, width: 1.2),
                         ),
                       ),
                     ),
@@ -172,29 +191,30 @@ class _AppBottomNavState extends State<AppBottomNav> with TickerProviderStateMix
               ),
 
               // Animated Text Label on expansion
-              AnimatedSize(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.fastOutSlowIn,
-                alignment: Alignment.centerRight,
-                child: isSelected
-                    ? Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Text(
-                          item.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.fade,
-                          softWrap: false,
-                          style: const TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.white,
-                            height: 1.1,
-                          ),
+              if (isSelected)
+                Flexible(
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.fastOutSlowIn,
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.white,
+                          height: 1.1,
                         ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

@@ -8,6 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'core/services/locator/get_it_locator.dart';
+import 'core/services/call_monitoring_service.dart';
+import 'core/services/push_notifications_service.dart';
 import 'core/utils/cache/cache_helper.dart';
 
 Future<void> initializeApp() async {
@@ -25,6 +27,9 @@ Future<void> initializeApp() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  await PushNotificationsService.instance.initialize();
+  await CallMonitoringService.initialize();
 
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
   Bloc.observer = AppBlocObserver();

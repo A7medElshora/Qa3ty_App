@@ -58,6 +58,69 @@ class LedgerEntry {
   }
 }
 
+class BookingCancellationResult {
+  final String status;
+  final int totalPrice;
+  final int totalPaid;
+  final int refundAmount;
+  final int retainedAmount;
+  final String? refundStatus;
+  final bool refunded;
+  final DateTime? cancelledAt;
+  final String? reason;
+  final String? refundMethod;
+  final String? refundNotes;
+
+  const BookingCancellationResult({
+    required this.status,
+    required this.totalPrice,
+    required this.totalPaid,
+    required this.refundAmount,
+    required this.retainedAmount,
+    this.refundStatus,
+    required this.refunded,
+    this.cancelledAt,
+    this.reason,
+    this.refundMethod,
+    this.refundNotes,
+  });
+
+  factory BookingCancellationResult.fromJson(Map<String, dynamic> json) {
+    final financialSummary =
+        json['financial_summary'] as Map<String, dynamic>? ?? const {};
+    final cancellation =
+        json['cancellation'] as Map<String, dynamic>? ?? const {};
+    int amount(dynamic value) => (value as num?)?.round() ?? 0;
+    final totalPaid =
+        amount(financialSummary['total_paid'] ?? cancellation['total_paid']);
+    final refundAmount = amount(
+        financialSummary['refund_amount'] ?? cancellation['refund_amount']);
+    final retainedAmount = amount(
+      financialSummary['retained_amount'] ??
+          cancellation['retained_amount'] ??
+          totalPaid - refundAmount,
+    );
+
+    return BookingCancellationResult(
+      status: json['status']?.toString() ?? 'cancelled',
+      totalPrice: amount(financialSummary['total_price']),
+      totalPaid: totalPaid,
+      refundAmount: refundAmount,
+      retainedAmount: retainedAmount,
+      refundStatus:
+          (financialSummary['refund_status'] ?? cancellation['refund_status'])
+              ?.toString(),
+      refunded: cancellation['refunded'] == true || refundAmount > 0,
+      cancelledAt: DateTime.tryParse(
+        cancellation['cancelled_at']?.toString() ?? '',
+      ),
+      reason: (cancellation['reason'] ?? json['reason'])?.toString(),
+      refundMethod: cancellation['refund_method']?.toString(),
+      refundNotes: cancellation['refund_notes']?.toString(),
+    );
+  }
+}
+
 class ServiceItem {
   final String id;
   final String name;
@@ -117,6 +180,12 @@ class Booking {
   final int? otherBookingId;
   final List<String> activityLog;
   final String? cancellationReason;
+  final int refundAmount;
+  final int retainedAmount;
+  final String? refundStatus;
+  final String? refundMethod;
+  final String? refundNotes;
+  final DateTime? cancelledAt;
 
   const Booking({
     required this.id,
@@ -141,6 +210,12 @@ class Booking {
     this.otherBookingId,
     this.activityLog = const [],
     this.cancellationReason,
+    this.refundAmount = 0,
+    this.retainedAmount = 0,
+    this.refundStatus,
+    this.refundMethod,
+    this.refundNotes,
+    this.cancelledAt,
   });
 
   /// Total services booked (only status == booked count into total charges)
@@ -155,6 +230,7 @@ class Booking {
 
   /// Total payments recorded
   int get paidAmount {
+    if (status == BookingLifecycleStatus.cancelled) return retainedAmount;
     return payments
         .where((p) => p.type == 'payment' || p.type == 'deposit')
         .fold(0, (sum, p) => sum + p.amount);
@@ -205,6 +281,12 @@ class Booking {
     int? otherBookingId,
     List<String>? activityLog,
     String? cancellationReason,
+    int? refundAmount,
+    int? retainedAmount,
+    String? refundStatus,
+    String? refundMethod,
+    String? refundNotes,
+    DateTime? cancelledAt,
   }) {
     return Booking(
       id: id ?? this.id,
@@ -229,6 +311,12 @@ class Booking {
       otherBookingId: otherBookingId ?? this.otherBookingId,
       activityLog: activityLog ?? this.activityLog,
       cancellationReason: cancellationReason ?? this.cancellationReason,
+      refundAmount: refundAmount ?? this.refundAmount,
+      retainedAmount: retainedAmount ?? this.retainedAmount,
+      refundStatus: refundStatus ?? this.refundStatus,
+      refundMethod: refundMethod ?? this.refundMethod,
+      refundNotes: refundNotes ?? this.refundNotes,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
     );
   }
 }

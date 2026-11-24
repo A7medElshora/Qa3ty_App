@@ -1,16 +1,21 @@
 plugins {
     id "com.android.application"
+    // START: FlutterFire Configuration
+    id 'com.google.gms.google-services'
+    id 'com.google.firebase.crashlytics'
+    // END: FlutterFire Configuration
     id "kotlin-android"
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
 }
 
 android {
-    namespace = "com.tabibsoft.qa3ty_app"
+    namespace = "com.tabibsoft.qa3ty_App"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
@@ -21,26 +26,29 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.tabibsoft.qa3ty_app"
+        applicationId "com.tabibsoft.qa3ty_App"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdkVersion = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Only build for real ARM devices — skips x86/x86_64 emulator libs that fill C: drive
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
     }
 
     flavorDimensions "default"
      productFlavors {
         production {
             dimension "default"
-            applicationId "com.tabibsoft.qa3ty_app"
+            applicationId "com.tabibsoft.qa3ty_App"
             resValue "string", "app_name", "qa3ty_app"
         }
         development {
             dimension "default"
-            applicationId "com.tabibsoft.qa3ty_app"
-            applicationIdSuffix ".dev"
+            applicationId "com.tabibsoft.qa3ty_App"
             resValue "string", "app_name", "qa3ty_app Development"
         }
     }
@@ -59,6 +67,7 @@ flutter {
 }
 
 dependencies {
+     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
      implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
      implementation "com.google.firebase:firebase-crashlytics-ktx"     
 }

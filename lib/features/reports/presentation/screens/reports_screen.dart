@@ -1,6 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
@@ -10,6 +12,7 @@ import 'package:qa3ty_app/core/utils/widgets/app_header.dart';
 import 'package:qa3ty_app/core/utils/widgets/chips.dart';
 import 'package:qa3ty_app/core/utils/widgets/section_card.dart';
 import 'package:qa3ty_app/core/utils/widgets/key_value_row.dart';
+import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../../data/models/report_model.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -33,7 +36,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _fetchReports() async {
     setState(() => _isLoading = true);
-    final summary = await ServicesLocator.reportsRepo.getSummary(period: _selectedPeriod);
+    final summary =
+        await ServicesLocator.reportsRepo.getSummary(period: _selectedPeriod);
     final comparisons = await ServicesLocator.reportsRepo.getHallsComparison();
     setState(() {
       _summary = summary;
@@ -51,13 +55,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'التقارير المالية والأرباح',
                 subtitle: 'تحليل الإيرادات، المصروفات، وصافي الأرباح',
                 actions: [
                   CircleIconButton.white(
-                    icon: const Icon(LucideIcons.fileSpreadsheet, size: 20, color: AppColors.green),
+                    icon: const Icon(LucideIcons.fileSpreadsheet,
+                        size: 20, color: AppColors.green),
                     onTap: _showExportExcelDialog,
                   ),
                 ],
@@ -86,10 +92,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppSkeletonizer(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.only(
+                          left: 16,
+                          right: 16,
+                          bottom: 80,
+                          top: 8,
+                        ),
+                        child: Column(
+                          children: [
+                            AppSkeletonPanel(height: 110, lineCount: 1),
+                            SizedBox(height: 14),
+                            AppSkeletonPanel(height: 250, lineCount: 5),
+                            SizedBox(height: 14),
+                            AppSkeletonPanel(height: 240, lineCount: 4),
+                          ],
+                        ),
+                      ),
+                    )
                   : SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 80, top: 8),
+                      padding: const EdgeInsets.only(
+                          left: 16, right: 16, bottom: 80, top: 8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -113,7 +138,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  AppFormatters.formatMoney(_summary?.netProfit ?? 0),
+                                  AppFormatters.formatMoney(
+                                      _summary?.netProfit ?? 0),
                                   style: const TextStyle(
                                     fontFamily: AppTextStyles.fontFamily,
                                     fontSize: 26,
@@ -134,37 +160,54 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               children: [
                                 KeyValueRow(
                                   label: 'إجمالي الإيرادات التعاقدية',
-                                  value: AppFormatters.formatMoney(_summary?.totalRevenue ?? 0),
+                                  value: AppFormatters.formatMoney(
+                                      _summary?.totalRevenue ?? 0),
                                 ),
                                 KeyValueRow(
                                   label: 'المبالغ المُحصَّلة فعلياً',
-                                  value: AppFormatters.formatMoney(_summary?.totalCollected ?? 0),
-                                  valueStyle: const TextStyle(color: AppColors.green, fontWeight: FontWeight.bold),
+                                  value: AppFormatters.formatMoney(
+                                      _summary?.totalCollected ?? 0),
+                                  valueStyle: const TextStyle(
+                                      color: AppColors.green,
+                                      fontWeight: FontWeight.bold),
                                 ),
                                 KeyValueRow(
                                   label: 'المبالغ المستحقة المتبقية',
-                                  value: AppFormatters.formatMoney(_summary?.totalDue ?? 0),
-                                  valueStyle: const TextStyle(color: AppColors.amberText, fontWeight: FontWeight.bold),
+                                  value: AppFormatters.formatMoney(
+                                      _summary?.totalDue ?? 0),
+                                  valueStyle: const TextStyle(
+                                      color: AppColors.amberText,
+                                      fontWeight: FontWeight.bold),
                                 ),
-                                const Divider(color: AppColors.line, height: 16),
+                                const Divider(
+                                    color: AppColors.line, height: 16),
                                 KeyValueRow(
                                   label: 'المصروفات التشغيلية',
-                                  value: AppFormatters.formatMoney(_summary?.totalExpenses ?? 0),
-                                  valueStyle: const TextStyle(color: AppColors.red, fontWeight: FontWeight.bold),
+                                  value: AppFormatters.formatMoney(
+                                      _summary?.totalExpenses ?? 0),
+                                  valueStyle: const TextStyle(
+                                      color: AppColors.red,
+                                      fontWeight: FontWeight.bold),
                                 ),
                                 KeyValueRow(
                                   label: 'أجور ورواتب العمال',
-                                  value: AppFormatters.formatMoney(_summary?.totalWages ?? 0),
-                                  valueStyle: const TextStyle(color: AppColors.red, fontWeight: FontWeight.bold),
+                                  value: AppFormatters.formatMoney(
+                                      _summary?.totalWages ?? 0),
+                                  valueStyle: const TextStyle(
+                                      color: AppColors.red,
+                                      fontWeight: FontWeight.bold),
                                 ),
                                 KeyValueRow(
                                   label: 'مشتريات المخزون',
-                                  value: AppFormatters.formatMoney(_summary?.totalStockPurchases ?? 0),
+                                  value: AppFormatters.formatMoney(
+                                      _summary?.totalStockPurchases ?? 0),
                                 ),
                                 KeyValueRow(
                                   label: 'قيمة الهالك والتالف',
-                                  value: AppFormatters.formatMoney(_summary?.totalStockWaste ?? 0),
-                                  valueStyle: const TextStyle(color: AppColors.red),
+                                  value: AppFormatters.formatMoney(
+                                      _summary?.totalStockWaste ?? 0),
+                                  valueStyle:
+                                      const TextStyle(color: AppColors.red),
                                 ),
                               ],
                             ),
@@ -181,19 +224,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 BarChartData(
                                   alignment: BarChartAlignment.spaceAround,
                                   maxY: 350000,
-                                  barTouchData: const BarTouchData(enabled: true),
+                                  barTouchData:
+                                      const BarTouchData(enabled: true),
                                   titlesData: FlTitlesData(
                                     bottomTitles: AxisTitles(
                                       sideTitles: SideTitles(
                                         showTitles: true,
                                         getTitlesWidget: (value, meta) {
                                           final idx = value.toInt();
-                                          if (idx >= 0 && idx < _comparisons.length) {
+                                          if (idx >= 0 &&
+                                              idx < _comparisons.length) {
                                             return Padding(
-                                              padding: const EdgeInsets.only(top: 8),
+                                              padding:
+                                                  const EdgeInsets.only(top: 8),
                                               child: Text(
                                                 _comparisons[idx].hallName,
-                                                style: const TextStyle(fontFamily: AppTextStyles.fontFamily, fontSize: 11),
+                                                style: const TextStyle(
+                                                    fontFamily: AppTextStyles
+                                                        .fontFamily,
+                                                    fontSize: 11),
                                               ),
                                             );
                                           }
@@ -201,13 +250,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                         },
                                       ),
                                     ),
-                                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                    leftTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
+                                    topTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
+                                    rightTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
                                   ),
                                   gridData: const FlGridData(show: false),
                                   borderData: FlBorderData(show: false),
-                                  barGroups: _comparisons.asMap().entries.map((e) {
+                                  barGroups:
+                                      _comparisons.asMap().entries.map((e) {
                                     final i = e.key;
                                     final comp = e.value;
                                     return BarChartGroupData(
@@ -215,9 +271,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                       barRods: [
                                         BarChartRodData(
                                           toY: comp.revenue.toDouble(),
-                                          color: i == 0 ? AppColors.primary : AppColors.gold,
+                                          color: i == 0
+                                              ? AppColors.primary
+                                              : AppColors.gold,
                                           width: 24,
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                       ],
                                     );
@@ -242,22 +301,64 @@ class _ReportsScreenState extends State<ReportsScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('تصدير كشف الحساب Excel', style: AppTextStyles.cardTitle),
+        title: const Text('تصدير كشف الحساب Excel',
+            style: AppTextStyles.cardTitle),
         content: const Text(
           'يمكنك اختيار فترة التقرير وتصدير ملف Excel مفصل بكافة السجلات المالية والحجوزات والمصروفات.\n\nTODO(API): الربط مع خادم التقارير وتوليد ملف xlsx المباشر.',
           style: AppTextStyles.body,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('جاري تجهيز التقرير للتصدير...')),
               );
+              try {
+                final repo = ServicesLocator.reportsRepo;
+                if (repo is RemoteReportsRepository) {
+                  final now = DateTime.now();
+                  final dir = await getApplicationDocumentsDirectory();
+                  final filePath =
+                      '${dir.path}/qa3aty_report_${now.year}_${now.month}.xlsx';
+                  await repo.downloadMonthlyExcel(
+                    year: now.year,
+                    month: now.month,
+                    savePath: filePath,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('تم تنزيل التقرير بنجاح، جاري فتحه...'),
+                        backgroundColor: AppColors.green,
+                      ),
+                    );
+                    await OpenFilex.open(filePath);
+                  }
+                } else {
+                  await Future.delayed(const Duration(milliseconds: 600));
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('تم تصدير التقرير التجريبي بنجاح')),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('فشل تصدير التقرير: $e'),
+                        backgroundColor: AppColors.red),
+                  );
+                }
+              }
             },
-            child: const Text('تصدير الآن', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('تصدير الآن', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

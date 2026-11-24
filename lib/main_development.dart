@@ -4,11 +4,13 @@ import 'dart:developer';
 import 'package:qa3ty_app/app.dart';
 import 'package:flutter/material.dart';
 
+import 'core/config/env.dart';
 import 'app_initi.dart';
 import 'core/navigation/app_router.dart';
 import 'core/utils/route_observer.dart';
 
 void main() async {
+  AppConfig.init(flavor: AppFlavor.development);
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.dumpErrorToConsole(details);
 

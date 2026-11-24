@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:skeletonizer/skeletonizer.dart';
+import 'state_widgets.dart';
 
 class CustomNetworkImage extends StatelessWidget {
   final String imageUrl;
@@ -32,12 +32,8 @@ class CustomNetworkImage extends StatelessWidget {
             : 'https://as1.ftcdn.net/v2/jpg/05/16/27/58/1000_F_516275801_f3Fsp17x6HQK0xQgDQEELoTuERO4SsWV.jpg',
         width: width,
         placeholder: (context, message) {
-          return Skeletonizer(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius!),
-              ),
-            ),
+          return AppSkeletonizer(
+            child: placeholderWidget,
           );
         },
         errorWidget: (context, message, error) {

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
@@ -11,23 +12,33 @@ import 'package:qa3ty_app/core/utils/widgets/chips.dart';
 import 'package:qa3ty_app/core/utils/widgets/day_circle.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_progress_bar.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_buttons.dart';
+import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../cubits/calendar_cubit.dart';
 import '../../data/models/calendar_day_model.dart';
 import 'package:qa3ty_app/features/bookings/presentation/widgets/add_payment_bottom_sheet.dart';
+import 'package:qa3ty_app/features/halls/data/models/hall_model.dart';
 
 class MonthlyCalendarScreen extends StatelessWidget {
   final String hallId;
+  final DateTime? initialMonth;
+  final int? initialSelectedDay;
 
   const MonthlyCalendarScreen({
     super.key,
     this.hallId = 'masia',
+    this.initialMonth,
+    this.initialSelectedDay,
   });
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => CalendarCubit(ServicesLocator.calendarRepo)
-        ..loadCalendar(hallId: hallId),
+        ..loadCalendar(
+          hallId: hallId,
+          month: initialMonth,
+          selectedDay: initialSelectedDay,
+        ),
       child: MonthlyCalendarView(hallId: hallId),
     );
   }
@@ -52,7 +63,24 @@ class MonthlyCalendarView extends StatelessWidget {
           child: BlocBuilder<CalendarCubit, CalendarState>(
             builder: (context, state) {
               if (state is CalendarLoading) {
-                return const Center(child: CircularProgressIndicator());
+                return const AppSkeletonizer(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(bottom: 80),
+                    child: Column(
+                      children: [
+                        AppSkeletonPanel(height: 64, lineCount: 1),
+                        SizedBox(height: 16),
+                        AppSkeletonPanel(height: 74, lineCount: 1),
+                        SizedBox(height: 14),
+                        AppSkeletonPanel(height: 100, lineCount: 2),
+                        SizedBox(height: 14),
+                        AppSkeletonPanel(height: 340, lineCount: 6),
+                        SizedBox(height: 14),
+                        AppSkeletonPanel(height: 180, lineCount: 3),
+                      ],
+                    ),
+                  ),
+                );
               }
               if (state is! CalendarLoaded) {
                 return const SizedBox.shrink();
@@ -90,38 +118,27 @@ class MonthlyCalendarView extends StatelessWidget {
                                 },
                               ),
                               const SizedBox(width: 12),
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'قاعة الماسة',
-                                      style: AppTextStyles.screenTitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      '٦٠٠ مقعد · طنطا، الغربية',
-                                      style: AppTextStyles.muted,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
+                              Expanded(
+                                child: _HallInfo(hallId: hallId),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        CircleIconButton.primary(
-                          icon: const Icon(
-                            LucideIcons.plus,
-                            size: 20,
-                            color: AppColors.white,
+                        if (PermissionGuard.canManageBookings)
+                          CircleIconButton.primary(
+                            icon: const Icon(
+                              LucideIcons.plus,
+                              size: 20,
+                              color: AppColors.white,
+                            ),
+                            onTap: () => _openNewBooking(
+                              context,
+                              cubit,
+                              state.currentMonth,
+                              day: state.selectedDay,
+                            ),
                           ),
-                          onTap: () => context.push('/bookings/new?hallId=$hallId'),
-                        ),
                       ],
                     ),
 
@@ -141,7 +158,8 @@ class MonthlyCalendarView extends StatelessWidget {
                               const SizedBox(width: 8),
                               Flexible(
                                 child: Text(
-                                  AppFormatters.formatMonthYear(state.currentMonth),
+                                  AppFormatters.formatMonthYear(
+                                      state.currentMonth),
                                   style: const TextStyle(
                                     fontFamily: AppTextStyles.fontFamily,
                                     fontSize: 18,
@@ -165,11 +183,13 @@ class MonthlyCalendarView extends StatelessWidget {
                           onTap: () => cubit.goToToday(),
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 6),
                             decoration: BoxDecoration(
                               color: AppColors.white,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.line, width: 1.0),
+                              border:
+                                  Border.all(color: AppColors.line, width: 1.0),
                             ),
                             child: const Text(
                               'اليوم',
@@ -234,10 +254,10 @@ class MonthlyCalendarView extends StatelessWidget {
                     // 6) Bottom Sheet Preview for Selected Day
                     _buildSelectedDayPreview(context, state, selectedDayModel),
 
-                    const SizedBox(height: 14),
-
-                    // 7) "مبالغ متبقية" Section
-                    _buildRemainingPaymentsSection(context, state.remainingPayments),
+                    if (PermissionGuard.canViewReports) ...[
+                      const SizedBox(height: 14),
+                      _buildRemainingPaymentsSection(context, state),
+                    ],
                   ],
                 ),
               );
@@ -246,6 +266,47 @@ class MonthlyCalendarView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openNewBooking(
+    BuildContext context,
+    CalendarCubit cubit,
+    DateTime month, {
+    int? day,
+  }) async {
+    final bookingDate = DateTime(
+      month.year,
+      month.month,
+      day ?? DateTime.now().day,
+    );
+    final dateQuery =
+        '&date=${bookingDate.year}-${bookingDate.month.toString().padLeft(2, '0')}-${bookingDate.day.toString().padLeft(2, '0')}';
+    final created = await context.push<bool>(
+      '/bookings/new?hallId=$hallId$dateQuery',
+    );
+    if (created == true && context.mounted) {
+      await cubit.loadCalendar(
+        hallId: hallId,
+        month: month,
+        selectedDay: bookingDate.day,
+      );
+    }
+  }
+
+  Future<void> _openBookingDetails(
+    BuildContext context,
+    CalendarLoaded state,
+    int bookingId,
+  ) async {
+    final wasCancelled = await context.push<bool>('/bookings/$bookingId');
+    if (wasCancelled == true && context.mounted) {
+      ServicesLocator.calendarRepo.invalidateCache(hallId: state.hallId);
+      await context.read<CalendarCubit>().loadCalendar(
+            hallId: state.hallId,
+            month: state.currentMonth,
+            selectedDay: state.selectedDay,
+          );
+    }
   }
 
   Widget _buildMonthNavButton({
@@ -274,6 +335,7 @@ class MonthlyCalendarView extends StatelessWidget {
   }
 
   Widget _buildMonthSummaryCard(MonthSummary summary) {
+    final canViewReports = PermissionGuard.canViewReports;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.primary,
@@ -290,22 +352,30 @@ class MonthlyCalendarView extends StatelessWidget {
               label: 'محجوز',
             ),
           ),
-          Container(width: 1, height: 32, color: AppColors.primarySoftText.withValues(alpha: 0.2)),
-          // 2) Expected revenue
-          Expanded(
-            child: _buildSummaryItem(
-              value: AppFormatters.formatMoneyOnly(summary.expectedRevenue),
-              label: 'المتوقع (ج.م)',
+          if (canViewReports) ...[
+            Container(
+              width: 1,
+              height: 32,
+              color: AppColors.primarySoftText.withValues(alpha: 0.2),
             ),
-          ),
-          Container(width: 1, height: 32, color: AppColors.primarySoftText.withValues(alpha: 0.2)),
-          // 3) Collected revenue
-          Expanded(
-            child: _buildSummaryItem(
-              value: AppFormatters.formatMoneyOnly(summary.collectedRevenue),
-              label: 'المُحصَّل (ج.م)',
+            Expanded(
+              child: _buildSummaryItem(
+                value: AppFormatters.formatMoneyOnly(summary.expectedRevenue),
+                label: 'المتوقع (ج.م)',
+              ),
             ),
-          ),
+            Container(
+              width: 1,
+              height: 32,
+              color: AppColors.primarySoftText.withValues(alpha: 0.2),
+            ),
+            Expanded(
+              child: _buildSummaryItem(
+                value: AppFormatters.formatMoneyOnly(summary.collectedRevenue),
+                label: 'المُحصَّل (ج.م)',
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -336,8 +406,13 @@ class MonthlyCalendarView extends StatelessWidget {
 
   Widget _buildCalendarGridCard(BuildContext context, CalendarLoaded state) {
     final cubit = context.read<CalendarCubit>();
-    // December 2026 starts on Tuesday (col 3: Saturday=0, Sunday=1, Monday=2, Tuesday=3)
-    const firstWeekdayOffset = 3;
+    final firstWeekdayOffset =
+        (DateTime(state.currentMonth.year, state.currentMonth.month, 1)
+                    .weekday +
+                1) %
+            7;
+    final daysInMonth = state.days.length;
+    final rowCount = (firstWeekdayOffset + daysInMonth + 6) ~/ 7;
 
     return Container(
       decoration: BoxDecoration(
@@ -370,15 +445,15 @@ class MonthlyCalendarView extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // Days grid: 5 rows
+          // Days grid
           Table(
-            children: List.generate(5, (rowIndex) {
+            children: List.generate(rowCount, (rowIndex) {
               return TableRow(
                 children: List.generate(7, (colIndex) {
                   final cellIndex = rowIndex * 7 + colIndex;
                   final dayNumber = cellIndex - firstWeekdayOffset + 1;
 
-                  if (dayNumber < 1 || dayNumber > 31) {
+                  if (dayNumber < 1 || dayNumber > daysInMonth) {
                     return const SizedBox(
                       width: 46,
                       height: 40,
@@ -390,11 +465,14 @@ class MonthlyCalendarView extends StatelessWidget {
 
                   // Dimming logic
                   bool isDimmed = false;
-                  if (state.activeFilter == 'deposit' && dayModel.status != DayStatus.deposit) {
+                  if (state.activeFilter == 'deposit' &&
+                      dayModel.status != DayStatus.deposit) {
                     isDimmed = true;
-                  } else if (state.activeFilter == 'paid' && dayModel.status != DayStatus.paid) {
+                  } else if (state.activeFilter == 'paid' &&
+                      dayModel.status != DayStatus.paid) {
                     isDimmed = true;
-                  } else if (state.activeFilter == 'tentative' && dayModel.status != DayStatus.tentative) {
+                  } else if (state.activeFilter == 'tentative' &&
+                      dayModel.status != DayStatus.tentative) {
                     isDimmed = true;
                   }
 
@@ -427,7 +505,14 @@ class MonthlyCalendarView extends StatelessWidget {
     CalendarLoaded state,
     CalendarDayModel? model,
   ) {
-    if (model == null || model.status == DayStatus.available || model.status == DayStatus.blocked) {
+    final selectedDate = DateTime(
+      state.currentMonth.year,
+      state.currentMonth.month,
+      state.selectedDay,
+    );
+    if (model == null ||
+        model.status == DayStatus.available ||
+        model.status == DayStatus.blocked) {
       // Empty / Available day
       return Container(
         decoration: BoxDecoration(
@@ -452,10 +537,15 @@ class MonthlyCalendarView extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'يوم ${state.selectedDay.toArabicDigits()} ديسمبر ٢٠٢٦',
-                  style: AppTextStyles.cardTitle,
+                Expanded(
+                  child: Text(
+                    AppFormatters.formatFullDate(selectedDate),
+                    style: AppTextStyles.cardTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 StatusChip.fromStatus(BookingServiceStatus.optional),
               ],
             ),
@@ -465,19 +555,25 @@ class MonthlyCalendarView extends StatelessWidget {
               style: AppTextStyles.muted,
             ),
             const SizedBox(height: 14),
-            AppPrimaryButton(
-              text: 'حجز جديد في هذا اليوم',
-              onPressed: () => context.push('/bookings/new?hallId=$hallId&day=${state.selectedDay}'),
-            ),
+            if (PermissionGuard.canManageBookings)
+              AppPrimaryButton(
+                text: 'حجز جديد في هذا اليوم',
+                onPressed: () => _openNewBooking(
+                  context,
+                  context.read<CalendarCubit>(),
+                  state.currentMonth,
+                  day: state.selectedDay,
+                ),
+              ),
           ],
         ),
       );
     }
 
-    // Exact specification for Day 15 (and other booked days)
-    final double progress = (model.totalAmount != null && model.totalAmount! > 0)
-        ? (model.paidAmount! / model.totalAmount!)
-        : 0.625;
+    final double progress =
+        (model.totalAmount != null && model.totalAmount! > 0)
+            ? (model.paidAmount! / model.totalAmount!)
+            : 0.625;
 
     return Container(
       decoration: BoxDecoration(
@@ -514,7 +610,7 @@ class MonthlyCalendarView extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'الثلاثاء ${model.dayNumber.toArabicDigits()} ديسمبر',
+                  AppFormatters.formatDayMonth(selectedDate),
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 16,
@@ -595,29 +691,37 @@ class MonthlyCalendarView extends StatelessWidget {
               Expanded(
                 child: AppPrimaryButton(
                   text: 'فتح التفاصيل',
-                  onPressed: () {
-                    final bId = model.bookingId ?? 1042;
-                    context.push('/bookings/$bId');
-                  },
+                  onPressed: () => _openBookingDetails(
+                    context,
+                    state,
+                    model.bookingId ?? 1042,
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: AppSecondaryButton(
-                  text: 'إضافة دفعة',
-                  onPressed: () {
-                    final bId = model.bookingId ?? 1042;
-                    AddPaymentBottomSheet.show(
-                      context: context,
-                      bookingId: bId,
-                      remainingAmount: model.remainingAmount ?? 18000,
-                      onPaymentSuccess: () {
-                        context.read<CalendarCubit>().loadCalendar(hallId: hallId);
-                      },
-                    );
-                  },
+              if (PermissionGuard.canManageBookings) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AppSecondaryButton(
+                    text: 'إضافة دفعة',
+                    onPressed: () {
+                      final bId = model.bookingId ?? 1042;
+                      AddPaymentBottomSheet.show(
+                        context: context,
+                        bookingId: bId,
+                        remainingAmount: model.remainingAmount ?? 18000,
+                        onPaymentSuccess: () {
+                          ServicesLocator.calendarRepo
+                              .invalidateCache(hallId: hallId);
+                          context.read<CalendarCubit>().loadCalendar(
+                                hallId: hallId,
+                                month: state.currentMonth,
+                              );
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -627,8 +731,9 @@ class MonthlyCalendarView extends StatelessWidget {
 
   Widget _buildRemainingPaymentsSection(
     BuildContext context,
-    List<RemainingPaymentItem> items,
+    CalendarLoaded state,
   ) {
+    final items = state.remainingPayments;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -670,7 +775,11 @@ class MonthlyCalendarView extends StatelessWidget {
               return Column(
                 children: [
                   InkWell(
-                    onTap: () => context.push('/bookings/${item.bookingId}'),
+                    onTap: () => _openBookingDetails(
+                      context,
+                      state,
+                      item.bookingId,
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(
@@ -696,16 +805,21 @@ class MonthlyCalendarView extends StatelessWidget {
                                     fontFamily: AppTextStyles.fontFamily,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w400,
-                                    color: item.isDueSoon ? AppColors.red : AppColors.muted,
+                                    color: item.isDueSoon
+                                        ? AppColors.red
+                                        : AppColors.muted,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: item.isDueSoon ? AppColors.redBg : AppColors.amberBg,
+                              color: item.isDueSoon
+                                  ? AppColors.redBg
+                                  : AppColors.amberBg,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -714,7 +828,9 @@ class MonthlyCalendarView extends StatelessWidget {
                                 fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: item.isDueSoon ? AppColors.red : AppColors.amberText,
+                                color: item.isDueSoon
+                                    ? AppColors.red
+                                    : AppColors.amberText,
                               ),
                             ),
                           ),
@@ -723,13 +839,91 @@ class MonthlyCalendarView extends StatelessWidget {
                     ),
                   ),
                   if (!isLast)
-                    const Divider(color: AppColors.line, height: 1, thickness: 1),
+                    const Divider(
+                        color: AppColors.line, height: 1, thickness: 1),
                 ],
               );
             }).toList(),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _HallInfo extends StatefulWidget {
+  final String hallId;
+
+  const _HallInfo({required this.hallId});
+
+  @override
+  State<_HallInfo> createState() => _HallInfoState();
+}
+
+class _HallInfoState extends State<_HallInfo> {
+  late Future<Hall?> _hallFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _hallFuture = ServicesLocator.hallsRepo.getHallById(widget.hallId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _HallInfo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.hallId != widget.hallId) {
+      _hallFuture = ServicesLocator.hallsRepo.getHallById(widget.hallId);
+    }
+  }
+
+  void _loadHall() {
+    setState(() {
+      _hallFuture = ServicesLocator.hallsRepo.getHallById(widget.hallId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Hall?>(
+      future: _hallFuture,
+      builder: (context, snapshot) {
+        final hall = snapshot.data;
+        final title = snapshot.hasError
+            ? 'تعذر تحميل بيانات القاعة'
+            : snapshot.connectionState != ConnectionState.done
+                ? 'جاري تحميل بيانات القاعة'
+                : hall?.name ?? 'القاعة غير موجودة';
+        final subtitle = hall == null
+            ? snapshot.hasError
+                ? 'اضغط لإعادة المحاولة'
+                : ''
+            : '${hall.capacity.toArabicDigits()} مقعد · ${hall.location}';
+
+        return GestureDetector(
+          onTap: snapshot.hasError ? _loadHall : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTextStyles.screenTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: AppTextStyles.muted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

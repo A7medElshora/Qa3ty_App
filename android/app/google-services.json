@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "405478207570",
-    "project_id": "qa3ty_app-f2ce2",
-    "storage_bucket": "qa3ty_app-f2ce2.appspot.com"
+    "project_number": "1030579100889",
+    "project_id": "qa3tyapp",
+    "storage_bucket": "qa3tyapp.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:405478207570:android:c8758d7cac1b8453c2af8b",
+        "mobilesdk_app_id": "1:1030579100889:android:403c24753ec240ea92f2c8",
         "android_client_info": {
-          "package_name": "com.touriest.qa3ty_app"
+          "package_name": "com.tabibsoft.qa3ty_App"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBYm7atk5QMnKPDUJ86l_HFkiUse0upy9k"
+          "current_key": "AIzaSyAI19De1Lk48T_gxRiucXrmU7_C-h4b4GE"
         }
       ],
       "services": {

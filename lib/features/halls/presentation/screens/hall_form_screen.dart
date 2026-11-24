@@ -9,6 +9,7 @@ import 'package:qa3ty_app/core/utils/widgets/app_text_field.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_buttons.dart';
 import 'package:qa3ty_app/core/utils/widgets/section_card.dart';
 import 'package:qa3ty_app/core/utils/widgets/day_circle.dart';
+import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../../data/models/hall_model.dart';
 
 class HallFormScreen extends StatefulWidget {
@@ -28,6 +29,8 @@ class _HallFormScreenState extends State<HallFormScreen> {
   int _slotsCount = 1;
   bool _isActive = true;
   bool _isLoading = false;
+  bool _isLoadingHall = false;
+  String? _hallLoadError;
 
   @override
   void initState() {
@@ -38,15 +41,33 @@ class _HallFormScreenState extends State<HallFormScreen> {
   }
 
   Future<void> _loadHallData() async {
-    final hall = await ServicesLocator.hallsRepo.getHallById(widget.editHallId!);
-    if (hall != null) {
+    setState(() {
+      _isLoadingHall = true;
+      _hallLoadError = null;
+    });
+
+    try {
+      final hall =
+          await ServicesLocator.hallsRepo.getHallById(widget.editHallId!);
+      if (!mounted) return;
+      if (hall == null) {
+        setState(() => _hallLoadError = 'تعذر العثور على بيانات القاعة');
+        return;
+      }
+
       _nameController.text = hall.name;
       _locationController.text = hall.location;
       _capacityController.text = hall.capacity.toString();
       _hoursController.text = hall.workingHours;
       _slotsCount = hall.dailySlotsCount;
       _isActive = hall.isActive;
-      setState(() {});
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _hallLoadError = 'تعذر تحميل بيانات القاعة: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingHall = false);
+      }
     }
   }
 
@@ -70,122 +91,151 @@ class _HallFormScreenState extends State<HallFormScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 10),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 10),
               child: AppHeader(
                 title: isEditing ? 'تعديل بيانات القاعة' : 'إضافة قاعة جديدة',
-                subtitle: isEditing ? _nameController.text : 'أدخل تفاصيل ومواصفات القاعة',
+                subtitle: isEditing
+                    ? _nameController.text
+                    : 'أدخل تفاصيل ومواصفات القاعة',
               ),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SectionCard(
-                      title: 'البيانات الأساسية',
-                      child: Column(
-                        children: [
-                          AppTextField(
-                            label: 'اسم القاعة',
-                            hint: 'مثال: قاعة اللؤلؤة الملكية',
-                            controller: _nameController,
-                          ),
-                          const SizedBox(height: 12),
-                          AppTextField(
-                            label: 'الموقع الجغرافي / العنوان',
-                            hint: 'مثال: طنطا، شارع الجيش',
-                            controller: _locationController,
-                          ),
-                          const SizedBox(height: 12),
-                          AppTextField(
-                            label: 'السعة الاستيعابية (عدد المقاعد)',
-                            hint: 'مثال: ٥٠٠',
-                            controller: _capacityController,
-                            keyboardType: TextInputType.number,
-                          ),
-                        ],
+              child: _isLoadingHall
+                  ? SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      child: const AppSkeletonizer(
+                        child: Column(
+                          children: [
+                            AppSkeletonPanel(height: 205, lineCount: 4),
+                            SizedBox(height: 14),
+                            AppSkeletonPanel(height: 205, lineCount: 4),
+                          ],
+                        ),
                       ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    SectionCard(
-                      title: 'مواعيد العمل والفترات',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppTextField(
-                            label: 'ساعات العمل الرسمية',
-                            hint: '٨:٠٠ م – ٢:٠٠ ص',
-                            controller: _hoursController,
-                          ),
-                          const SizedBox(height: 14),
-                          const Text(
-                            'عدد الفترات اليومية المتاحة للحجز',
-                            style: TextStyle(
-                              fontFamily: AppTextStyles.fontFamily,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.muted,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [1, 2, 3].map((count) {
-                              final isSelected = _slotsCount == count;
-                              return Padding(
-                                padding: const EdgeInsets.only(left: 10),
-                                child: ChoiceChip(
-                                  label: Text('${count.toArabicDigits()} فترة'),
-                                  selected: isSelected,
-                                  selectedColor: AppColors.primary,
-                                  labelStyle: TextStyle(
-                                    color: isSelected ? AppColors.white : AppColors.ink,
-                                    fontFamily: AppTextStyles.fontFamily,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  onSelected: (val) {
-                                    if (val) setState(() => _slotsCount = count);
-                                  },
+                    )
+                  : _hallLoadError != null
+                      ? ErrorState(
+                          message: _hallLoadError!,
+                          onRetry: _loadHallData,
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SectionCard(
+                                title: 'البيانات الأساسية',
+                                child: Column(
+                                  children: [
+                                    AppTextField(
+                                      label: 'اسم القاعة',
+                                      hint: 'مثال: قاعة اللؤلؤة الملكية',
+                                      controller: _nameController,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    AppTextField(
+                                      label: 'الموقع الجغرافي / العنوان',
+                                      hint: 'مثال: طنطا، شارع الجيش',
+                                      controller: _locationController,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    AppTextField(
+                                      label: 'السعة الاستيعابية (عدد المقاعد)',
+                                      hint: 'مثال: ٥٠٠',
+                                      controller: _capacityController,
+                                      keyboardType: TextInputType.number,
+                                    ),
+                                  ],
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                              const SizedBox(height: 14),
+                              SectionCard(
+                                title: 'مواعيد العمل والفترات',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    AppTextField(
+                                      label: 'ساعات العمل الرسمية',
+                                      hint: '٨:٠٠ م – ٢:٠٠ ص',
+                                      controller: _hoursController,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    const Text(
+                                      'عدد الفترات اليومية المتاحة للحجز',
+                                      style: TextStyle(
+                                        fontFamily: AppTextStyles.fontFamily,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.muted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [1, 2, 3].map((count) {
+                                        final isSelected = _slotsCount == count;
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(left: 10),
+                                          child: ChoiceChip(
+                                            label: Text(
+                                                '${count.toArabicDigits()} فترة'),
+                                            selected: isSelected,
+                                            selectedColor: AppColors.primary,
+                                            labelStyle: TextStyle(
+                                              color: isSelected
+                                                  ? AppColors.white
+                                                  : AppColors.ink,
+                                              fontFamily:
+                                                  AppTextStyles.fontFamily,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            onSelected: (val) {
+                                              if (val)
+                                                setState(
+                                                    () => _slotsCount = count);
+                                            },
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text(
+                                          'حالة القاعة نشطة ومتاحة للحجز',
+                                          style: AppTextStyles.body),
+                                      value: _isActive,
+                                      activeTrackColor: AppColors.primary,
+                                      onChanged: (val) =>
+                                          setState(() => _isActive = val),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              AppPrimaryButton(
+                                text: isEditing
+                                    ? 'حفظ التعديلات'
+                                    : 'إضافة القاعة',
+                                isLoading: _isLoading,
+                                onPressed: _saveHall,
+                              ),
+                              if (isEditing) ...[
+                                const SizedBox(height: 10),
+                                AppSecondaryButton(
+                                  text: 'حذف القاعة',
+                                  textColor: AppColors.red,
+                                  borderColor: AppColors.red,
+                                  onPressed: _deleteHall,
+                                ),
+                              ],
+                              const SizedBox(height: 30),
+                            ],
                           ),
-                          const SizedBox(height: 14),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('حالة القاعة نشطة ومتاحة للحجز', style: AppTextStyles.body),
-                            value: _isActive,
-                            activeTrackColor: AppColors.primary,
-                            onChanged: (val) => setState(() => _isActive = val),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    AppPrimaryButton(
-                      text: isEditing ? 'حفظ التعديلات' : 'إضافة القاعة',
-                      isLoading: _isLoading,
-                      onPressed: _saveHall,
-                    ),
-
-                    if (isEditing) ...[
-                      const SizedBox(height: 10),
-                      AppSecondaryButton(
-                        text: 'حذف القاعة',
-                        textColor: AppColors.red,
-                        borderColor: AppColors.red,
-                        onPressed: _deleteHall,
-                      ),
-                    ],
-
-                    const SizedBox(height: 30),
-                  ],
-                ),
-              ),
+                        ),
             ),
           ],
         ),
@@ -200,14 +250,16 @@ class _HallFormScreenState extends State<HallFormScreen> {
 
     if (name.isEmpty || capacity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى ملء كافة الحقول الأساسية وسعة صحيحة')),
+        const SnackBar(
+            content: Text('يرجى ملء كافة الحقول الأساسية وسعة صحيحة')),
       );
       return;
     }
 
     setState(() => _isLoading = true);
 
-    final hallId = widget.editHallId ?? 'hall_${DateTime.now().millisecondsSinceEpoch}';
+    final hallId =
+        widget.editHallId ?? 'hall_${DateTime.now().millisecondsSinceEpoch}';
     final hall = Hall(
       id: hallId,
       name: name,
@@ -237,7 +289,10 @@ class _HallFormScreenState extends State<HallFormScreen> {
     if (mounted) {
       context.pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.editHallId != null ? 'تم تحديث القاعة بنجاح' : 'تمت إضافة القاعة بنجاح')),
+        SnackBar(
+            content: Text(widget.editHallId != null
+                ? 'تم تحديث القاعة بنجاح'
+                : 'تمت إضافة القاعة بنجاح')),
       );
     }
   }
@@ -246,10 +301,13 @@ class _HallFormScreenState extends State<HallFormScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('تأكيد الحذف', style: TextStyle(color: AppColors.red)),
+        title:
+            const Text('تأكيد الحذف', style: TextStyle(color: AppColors.red)),
         content: const Text('هل أنت متأكد من حذف هذه القاعة؟'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
             onPressed: () => Navigator.pop(ctx, true),

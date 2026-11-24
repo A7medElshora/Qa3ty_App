@@ -1,3 +1,6 @@
+import 'package:dio/dio.dart';
+import 'package:qa3ty_app/core/networking/api_exceptions.dart';
+
 class Expense {
   final String id;
   final String title;
@@ -51,6 +54,124 @@ abstract class ExpensesRepository {
   Future<void> addExpense(Expense expense);
   Future<void> updateExpense(Expense expense);
   Future<void> deleteExpense(String id);
+}
+
+class RemoteExpensesRepository implements ExpensesRepository {
+  final Dio _dio;
+
+  RemoteExpensesRepository(this._dio);
+
+  final List<Expense> _localExpenses = [];
+  Map<String, String>? _categoryNameToId;
+
+  Future<void> _ensureCategories() async {
+    if (_categoryNameToId != null) return;
+    try {
+      final response = await _dio.get('/expense-categories');
+      if (response.data is Map<String, dynamic> && response.data['data'] is List) {
+        final list = response.data['data'] as List<dynamic>;
+        _categoryNameToId = {};
+        for (final item in list) {
+          if (item is Map<String, dynamic>) {
+            final name = item['name']?.toString() ?? '';
+            final id = item['id']?.toString() ?? '';
+            _categoryNameToId![name] = id;
+          }
+        }
+      }
+    } catch (_) {
+      _categoryNameToId = {};
+    }
+  }
+
+  @override
+  Future<List<Expense>> getExpenses() async {
+    try {
+      await _ensureCategories();
+      final response = await _dio.get('/expenses');
+      List<dynamic> items = [];
+      if (response.data is Map<String, dynamic>) {
+        final data = response.data as Map<String, dynamic>;
+        if (data['data'] is Map<String, dynamic> && data['data']['items'] is List) {
+          items = data['data']['items'] as List<dynamic>;
+        } else if (data['data'] is List) {
+          items = data['data'] as List<dynamic>;
+        }
+      }
+
+      final fetched = items.whereType<Map<String, dynamic>>().map((json) {
+        final dateStr = json['expense_date']?.toString();
+        final date = dateStr != null ? (DateTime.tryParse(dateStr) ?? DateTime.now()) : DateTime.now();
+        final amount = (json['amount'] as num?)?.round() ?? 0;
+
+        return Expense(
+          id: json['id']?.toString() ?? '',
+          title: json['description']?.toString() ?? 'مصروف',
+          category: json['category_name']?.toString() ?? 'أخرى',
+          hallId: json['hall_id']?.toString() ?? 'all',
+          hallName: json['hall_name']?.toString() ?? 'عام لجميع القاعات',
+          amount: amount,
+          date: date,
+          note: json['notes']?.toString(),
+        );
+      }).toList();
+
+      return [...fetched, ..._localExpenses];
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> addExpense(Expense expense) async {
+    try {
+      await _ensureCategories();
+      String? catId = _categoryNameToId?[expense.category];
+
+      // If category not found, create it via POST /expense-categories
+      if (catId == null && expense.category.isNotEmpty && expense.category != 'الكل') {
+        try {
+          final catRes = await _dio.post('/expense-categories', data: {'name': expense.category});
+          if (catRes.data is Map<String, dynamic> && catRes.data['data'] is Map<String, dynamic>) {
+            catId = catRes.data['data']['id']?.toString();
+            if (catId != null) _categoryNameToId![expense.category] = catId;
+          }
+        } catch (_) {}
+      }
+
+      final dateStr = '${expense.date.year}-${expense.date.month.toString().padLeft(2, '0')}-${expense.date.day.toString().padLeft(2, '0')}';
+
+      await _dio.post(
+        '/expenses',
+        data: {
+          if (catId != null) 'category_id': catId,
+          'description': expense.title,
+          'amount': expense.amount.toDouble(),
+          'expense_date': dateStr,
+          if (expense.hallId.isNotEmpty && expense.hallId != 'all' && expense.hallId.length > 10)
+            'hall_id': expense.hallId,
+          'notes': expense.note,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> updateExpense(Expense expense) async {
+    // TODO(API): Update expense is not documented in API, maintained locally
+    final idx = _localExpenses.indexWhere((e) => e.id == expense.id);
+    if (idx != -1) {
+      _localExpenses[idx] = expense;
+    }
+  }
+
+  @override
+  Future<void> deleteExpense(String id) async {
+    // TODO(API): Delete expense is not documented in API, maintained locally
+    _localExpenses.removeWhere((e) => e.id == id);
+  }
 }
 
 class MockExpensesRepository implements ExpensesRepository {

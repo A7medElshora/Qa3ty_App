@@ -44,6 +44,7 @@ class Hall {
   final List<HallDaySchedule> currentWeekSchedule;
   final int weekBookingsCount;
   final int weekRemainingAmount;
+  final int upcomingRemainingAmount;
 
   const Hall({
     required this.id,
@@ -57,6 +58,7 @@ class Hall {
     required this.currentWeekSchedule,
     required this.weekBookingsCount,
     required this.weekRemainingAmount,
+    this.upcomingRemainingAmount = 0,
   });
 
   Hall copyWith({
@@ -71,6 +73,7 @@ class Hall {
     List<HallDaySchedule>? currentWeekSchedule,
     int? weekBookingsCount,
     int? weekRemainingAmount,
+    int? upcomingRemainingAmount,
   }) {
     return Hall(
       id: id ?? this.id,
@@ -84,6 +87,8 @@ class Hall {
       currentWeekSchedule: currentWeekSchedule ?? this.currentWeekSchedule,
       weekBookingsCount: weekBookingsCount ?? this.weekBookingsCount,
       weekRemainingAmount: weekRemainingAmount ?? this.weekRemainingAmount,
+      upcomingRemainingAmount:
+          upcomingRemainingAmount ?? this.upcomingRemainingAmount,
     );
   }
 }

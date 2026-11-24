@@ -50,13 +50,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBYm7atk5QMnKPDUJ86l_HFkiUse0upy9k',
-    appId: '1:405478207570:android:c8758d7cac1b8453c2af8b',
-    messagingSenderId: '405478207570',
-    projectId: 'qa3ty-f2ce2',
-    storageBucket: 'qa3ty-f2ce2.appspot.com',
+    apiKey: 'AIzaSyAI19De1Lk48T_gxRiucXrmU7_C-h4b4GE',
+    appId: '1:1030579100889:android:403c24753ec240ea92f2c8',
+    messagingSenderId: '1030579100889',
+    projectId: 'qa3tyapp',
+    storageBucket: 'qa3tyapp.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCvl7nfC63m2grQ6-vyjVvk9MlhOIfglT8',
     appId: '1:405478207570:ios:e7bb9f1a6d9cae29c2af8b',

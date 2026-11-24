@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
@@ -76,13 +77,23 @@ class _BookingsListScreenState extends State<BookingsListScreen>
     // Tab filter: 0: القادمة, 1: المكتملة, 2: الملغاة, 3: عليها متبقي
     switch (tabIndex) {
       case 0:
-        return list.where((b) => b.status == BookingLifecycleStatus.confirmed).toList();
+        return list
+            .where((b) => b.status == BookingLifecycleStatus.confirmed)
+            .toList();
       case 1:
-        return list.where((b) => b.status == BookingLifecycleStatus.completed).toList();
+        return list
+            .where((b) => b.status == BookingLifecycleStatus.completed)
+            .toList();
       case 2:
-        return list.where((b) => b.status == BookingLifecycleStatus.cancelled).toList();
+        return list
+            .where((b) => b.status == BookingLifecycleStatus.cancelled)
+            .toList();
       case 3:
-        return list.where((b) => b.remainingAmount > 0).toList();
+        return list
+            .where((b) =>
+                b.status != BookingLifecycleStatus.cancelled &&
+                b.remainingAmount > 0)
+            .toList();
       default:
         return list;
     }
@@ -97,15 +108,18 @@ class _BookingsListScreenState extends State<BookingsListScreen>
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'إدارة الحجوزات',
                 subtitle: 'استعراض وبحث وتصفية كافة الحجوزات',
                 actions: [
-                  CircleIconButton.primary(
-                    icon: const Icon(LucideIcons.plus, size: 20, color: AppColors.white),
-                    onTap: () => context.push('/bookings/new'),
-                  ),
+                  if (PermissionGuard.canManageBookings)
+                    CircleIconButton.primary(
+                      icon: const Icon(LucideIcons.plus,
+                          size: 20, color: AppColors.white),
+                      onTap: () => context.push('/bookings/new'),
+                    ),
                 ],
               ),
             ),
@@ -116,7 +130,8 @@ class _BookingsListScreenState extends State<BookingsListScreen>
               child: AppTextField(
                 hint: 'بحث باسم العميل، الهاتف، أو رقم الحجز...',
                 controller: _searchController,
-                prefixIcon: const Icon(LucideIcons.search, size: 18, color: AppColors.muted),
+                prefixIcon: const Icon(LucideIcons.search,
+                    size: 18, color: AppColors.muted),
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -155,22 +170,25 @@ class _BookingsListScreenState extends State<BookingsListScreen>
             // List of bookings
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppListSkeleton(itemCount: 4)
                   : TabBarView(
                       controller: _tabController,
                       children: List.generate(4, (index) {
                         final bookings = _getFilteredBookings(index);
                         if (bookings.isEmpty) {
-                          return const EmptyState(
+                          return EmptyState(
                             title: 'لا توجد حجوزات في هذا التبويب',
-                            subtitle: 'يمكنك إضافة حجز جديد أو تغيير معايير البحث والفلترة.',
+                            subtitle: PermissionGuard.canManageBookings
+                                ? 'يمكنك إضافة حجز جديد أو تغيير معايير البحث والفلترة.'
+                                : 'يمكنك تغيير معايير البحث والفلترة لعرض الحجوزات.',
                           );
                         }
 
                         return RefreshIndicator(
                           onRefresh: _fetchBookings,
                           child: ListView.builder(
-                            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 80, top: 8),
+                            padding: const EdgeInsets.only(
+                                left: 16, right: 16, bottom: 80, top: 8),
                             itemCount: bookings.length,
                             itemBuilder: (context, i) {
                               final b = bookings[i];
@@ -200,7 +218,13 @@ class _BookingsListScreenState extends State<BookingsListScreen>
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => context.push('/bookings/${booking.id}'),
+          onTap: () async {
+            final wasCancelled =
+                await context.push<bool>('/bookings/${booking.id}');
+            if (wasCancelled == true && mounted) {
+              await _fetchBookings();
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -219,9 +243,15 @@ class _BookingsListScreenState extends State<BookingsListScreen>
                       ),
                     ),
                     StatusChip(
-                      label: booking.remainingAmount == 0 ? 'مدفوع بالكامل' : 'عربون متبقي',
-                      backgroundColor: booking.remainingAmount == 0 ? AppColors.greenBg : AppColors.amberBg,
-                      textColor: booking.remainingAmount == 0 ? AppColors.green : AppColors.amberText,
+                      label: booking.remainingAmount == 0
+                          ? 'مدفوع بالكامل'
+                          : 'عربون متبقي',
+                      backgroundColor: booking.remainingAmount == 0
+                          ? AppColors.greenBg
+                          : AppColors.amberBg,
+                      textColor: booking.remainingAmount == 0
+                          ? AppColors.green
+                          : AppColors.amberText,
                     ),
                   ],
                 ),

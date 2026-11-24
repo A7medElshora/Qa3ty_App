@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
@@ -67,18 +68,22 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'المصروفات والتكاليف',
-                subtitle: 'إجمالي: ${AppFormatters.formatMoney(_totalExpensesAmount)}',
+                subtitle:
+                    'إجمالي: ${AppFormatters.formatMoney(_totalExpensesAmount)}',
                 actions: [
-                  CircleIconButton.primary(
-                    icon: const Icon(LucideIcons.plus, size: 20, color: AppColors.white),
-                    onTap: () async {
-                      await context.push('/expenses/form');
-                      _fetchExpenses();
-                    },
-                  ),
+                  if (PermissionGuard.canManageExpenses)
+                    CircleIconButton.primary(
+                      icon: const Icon(LucideIcons.plus,
+                          size: 20, color: AppColors.white),
+                      onTap: () async {
+                        await context.push('/expenses/form');
+                        _fetchExpenses();
+                      },
+                    ),
                 ],
               ),
             ),
@@ -104,7 +109,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             // Expenses list
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppListSkeleton(itemCount: 4)
                   : _filteredExpenses.isEmpty
                       ? const EmptyState(
                           title: 'لا توجد مصروفات مسجلة',
@@ -113,7 +118,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       : RefreshIndicator(
                           onRefresh: _fetchExpenses,
                           child: ListView.builder(
-                            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 80, top: 8),
+                            padding: const EdgeInsets.only(
+                                left: 16, right: 16, bottom: 80, top: 8),
                             itemCount: _filteredExpenses.length,
                             itemBuilder: (context, i) {
                               final exp = _filteredExpenses[i];
@@ -149,7 +155,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ),
             if (exp.note != null) ...[
               const SizedBox(height: 2),
-              Text(exp.note!, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+              Text(exp.note!,
+                  style: const TextStyle(fontSize: 11, color: AppColors.muted)),
             ],
           ],
         ),

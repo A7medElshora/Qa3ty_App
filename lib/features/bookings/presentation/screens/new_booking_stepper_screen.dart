@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
+import 'package:qa3ty_app/core/networking/api_exceptions.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_header.dart';
@@ -11,21 +12,30 @@ import 'package:qa3ty_app/core/utils/widgets/app_buttons.dart';
 import 'package:qa3ty_app/core/utils/widgets/section_card.dart';
 import 'package:qa3ty_app/core/utils/widgets/chips.dart';
 import 'package:qa3ty_app/core/utils/widgets/key_value_row.dart';
+import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../../data/models/booking_model.dart';
+import '../../../customers/data/models/customer_model.dart';
 import '../../../halls/data/models/hall_model.dart';
 
 class NewBookingStepperScreen extends StatefulWidget {
   final String? initialHallId;
   final int? initialDay;
+  final DateTime? initialDate;
+  final String? initialCustomerPhone;
+  final String? initialCustomerName;
 
   const NewBookingStepperScreen({
     super.key,
     this.initialHallId,
     this.initialDay,
+    this.initialDate,
+    this.initialCustomerPhone,
+    this.initialCustomerName,
   });
 
   @override
-  State<NewBookingStepperScreen> createState() => _NewBookingStepperScreenState();
+  State<NewBookingStepperScreen> createState() =>
+      _NewBookingStepperScreenState();
 }
 
 class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
@@ -33,12 +43,14 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
   final int _totalSteps = 7;
 
   // Step 1: Hall
-  String _selectedHallId = 'masia';
-  String _selectedHallName = 'قاعة الماسة';
+  String _selectedHallId = '';
+  String _selectedHallName = '';
   List<Hall> _halls = [];
+  bool _isLoadingHalls = true;
+  String? _hallsError;
 
   // Step 2: Date & Slot
-  DateTime _selectedDate = DateTime(2026, 12, 15);
+  DateTime _selectedDate = DateTime.now();
   String _selectedTimeSlot = '٨:٠٠ م – ١:٠٠ ص';
 
   // Step 3: Customer
@@ -59,6 +71,8 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
     'دبكة لبنانية': false,
     'عروض ليزر شو': false,
     'مؤثرات الدخان الثقيل': false,
+    'الجاتوه': false,
+    'المشروبات': false,
   };
   final Map<String, int> _servicePrices = {
     'زفة استعراضية': 3000,
@@ -66,6 +80,12 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
     'دبكة لبنانية': 4000,
     'عروض ليزر شو': 2500,
     'مؤثرات الدخان الثقيل': 1500,
+    'الجاتوه': 0,
+    'المشروبات': 0,
+  };
+  final Map<String, TextEditingController> _servicePriceControllers = {
+    'الجاتوه': TextEditingController(),
+    'المشروبات': TextEditingController(),
   };
 
   // Step 6: Notes
@@ -82,20 +102,49 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
     if (widget.initialHallId != null) {
       _selectedHallId = widget.initialHallId!;
     }
-    if (widget.initialDay != null) {
-      _selectedDate = DateTime(2026, 12, widget.initialDay!);
+    _phoneController.text = widget.initialCustomerPhone ?? '';
+    _nameController.text = widget.initialCustomerName ?? '';
+    if (widget.initialDate != null) {
+      _selectedDate = widget.initialDate!;
+    } else if (widget.initialDay != null) {
+      final today = DateTime.now();
+      _selectedDate = DateTime(today.year, today.month, widget.initialDay!);
     }
   }
 
   Future<void> _loadHalls() async {
-    final halls = await ServicesLocator.hallsRepo.getHalls();
     setState(() {
-      _halls = halls;
-      if (_halls.isNotEmpty && widget.initialHallId == null) {
-        _selectedHallId = _halls.first.id;
-        _selectedHallName = _halls.first.name;
-      }
+      _isLoadingHalls = true;
+      _hallsError = null;
     });
+
+    try {
+      final halls = await ServicesLocator.hallsRepo.getHalls();
+      if (!mounted) return;
+
+      Hall? requestedHall;
+      for (final hall in halls) {
+        if (hall.id == widget.initialHallId) {
+          requestedHall = hall;
+          break;
+        }
+      }
+      final selectedHall =
+          requestedHall ?? (halls.isNotEmpty ? halls.first : null);
+
+      setState(() {
+        _halls = halls;
+        _selectedHallId = selectedHall?.id ?? '';
+        _selectedHallName = selectedHall?.name ?? '';
+        _isLoadingHalls = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _hallsError = error.toString();
+        _isLoadingHalls = false;
+      });
+    }
   }
 
   int get _hallPrice => int.tryParse(_priceController.text.trim()) ?? 0;
@@ -104,9 +153,17 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
   int get _servicesTotal {
     int sum = 0;
     _selectedServices.forEach((service, isSelected) {
-      if (isSelected) sum += _servicePrices[service] ?? 0;
+      if (isSelected) sum += _servicePrice(service);
     });
     return sum;
+  }
+
+  int _servicePrice(String service) {
+    final controller = _servicePriceControllers[service];
+    if (controller != null) {
+      return int.tryParse(_normalizePhone(controller.text)) ?? 0;
+    }
+    return _servicePrices[service] ?? 0;
   }
 
   int get _totalAmount => _hallPrice + _servicesTotal;
@@ -125,6 +182,9 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
     _eventNotesController.dispose();
     _setupNotesController.dispose();
     _internalNotesController.dispose();
+    for (final controller in _servicePriceControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -137,10 +197,12 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'حجز جديد',
-                subtitle: 'خطوة ${(_currentStep + 1).toArabicDigits()} من ${_totalSteps.toArabicDigits()}: ${_getStepTitle(_currentStep)}',
+                subtitle:
+                    'خطوة ${(_currentStep + 1).toArabicDigits()} من ${_totalSteps.toArabicDigits()}: ${_getStepTitle(_currentStep)}',
               ),
             ),
 
@@ -152,7 +214,8 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
                 child: LinearProgressIndicator(
                   value: (_currentStep + 1) / _totalSteps,
                   backgroundColor: AppColors.line,
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.primary),
                   minHeight: 6,
                 ),
               ),
@@ -189,9 +252,16 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
                   Expanded(
                     flex: 2,
                     child: AppPrimaryButton(
-                      text: _currentStep == _totalSteps - 1 ? 'تأكيد وحفظ الحجز' : 'التالي والمتابعة',
+                      text: _currentStep == _totalSteps - 1
+                          ? 'تأكيد وحفظ الحجز'
+                          : 'التالي والمتابعة',
                       isLoading: _isLoading,
-                      onPressed: _onNextPressed,
+                      onPressed: _currentStep == 0 &&
+                              (_isLoadingHalls ||
+                                  _hallsError != null ||
+                                  _halls.isEmpty)
+                          ? null
+                          : _onNextPressed,
                     ),
                   ),
                 ],
@@ -248,34 +318,77 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
   Widget _buildStep0HallSelection() {
     return SectionCard(
       title: 'اختر القاعة المناسبة',
-      child: Column(
-        children: _halls.map((hall) {
-          final isSelected = _selectedHallId == hall.id;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: isSelected ? AppColors.white : AppColors.background,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.line,
-                width: isSelected ? 2.0 : 1.0,
+      child: _isLoadingHalls
+          ? const AppSkeletonizer(
+              child: Column(
+                children: [
+                  AppSkeletonPanel(height: 92, lineCount: 2),
+                  SizedBox(height: 12),
+                  AppSkeletonPanel(height: 92, lineCount: 2),
+                ],
               ),
-            ),
-            child: ListTile(
-              title: Text(hall.name, style: AppTextStyles.cardTitle),
-              subtitle: Text('${hall.location} · سعة ${hall.capacity.toArabicDigits()} مقعد', style: AppTextStyles.muted),
-              leading: Icon(LucideIcons.building2, color: isSelected ? AppColors.primary : AppColors.muted),
-              trailing: isSelected ? const Icon(LucideIcons.checkCircle2, color: AppColors.primary) : null,
-              onTap: () {
-                setState(() {
-                  _selectedHallId = hall.id;
-                  _selectedHallName = hall.name;
-                });
-              },
-            ),
-          );
-        }).toList(),
-      ),
+            )
+          : _hallsError != null
+              ? Column(
+                  children: [
+                    const Text('تعذر تحميل القاعات'),
+                    TextButton(
+                      onPressed: _loadHalls,
+                      child: const Text('إعادة المحاولة'),
+                    ),
+                  ],
+                )
+              : _halls.isEmpty
+                  ? const EmptyState(
+                      title: 'لا توجد قاعات متاحة',
+                      subtitle: 'أضف قاعة قبل إنشاء حجز جديد.',
+                    )
+                  : Column(
+                      children: _halls.map((hall) {
+                        final isSelected = _selectedHallId == hall.id;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.white
+                                : AppColors.background,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.line,
+                              width: isSelected ? 2.0 : 1.0,
+                            ),
+                          ),
+                          child: ListTile(
+                            title:
+                                Text(hall.name, style: AppTextStyles.cardTitle),
+                            subtitle: Text(
+                              '${hall.location} · سعة ${hall.capacity.toArabicDigits()} مقعد',
+                              style: AppTextStyles.muted,
+                            ),
+                            leading: Icon(
+                              LucideIcons.building2,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.muted,
+                            ),
+                            trailing: isSelected
+                                ? const Icon(
+                                    LucideIcons.checkCircle2,
+                                    color: AppColors.primary,
+                                  )
+                                : null,
+                            onTap: () {
+                              setState(() {
+                                _selectedHallId = hall.id;
+                                _selectedHallName = hall.name;
+                              });
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
     );
   }
 
@@ -304,11 +417,13 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
             },
           ),
           const SizedBox(height: 20),
-          const Text('الفترة الزمنية', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('الفترة الزمنية',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
-            children: ['٨:٠٠ م – ١:٠٠ ص', '١:٠٠ ظ – ٥:٠٠ م', '٧:٠٠ م – ١٢:٠٠ ص'].map((slot) {
+            children: ['٨:٠٠ م – ١:٠٠ ص', '١:٠٠ ظ – ٥:٠٠ م', '٧:٠٠ م – ١٢:٠٠ ص']
+                .map((slot) {
               final isSelected = _selectedTimeSlot == slot;
               return ChoiceChip(
                 label: Text(slot),
@@ -356,12 +471,22 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
           const SizedBox(height: 14),
           const Align(
             alignment: Alignment.centerRight,
-            child: Text('نوع المناسبة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.muted)),
+            child: Text('نوع المناسبة',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: AppColors.muted)),
           ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
-            children: ['حفل زفاف', 'حفل خطوبة', 'كتب كتاب', 'حفل تخرج', 'عيد ميلاد'].map((type) {
+            children: [
+              'حفل زفاف',
+              'حفل خطوبة',
+              'كتب كتاب',
+              'حفل تخرج',
+              'عيد ميلاد'
+            ].map((type) {
               final isSelected = _selectedEventType == type;
               return ChoiceChip(
                 label: Text(type),
@@ -409,18 +534,28 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
             ),
             child: Column(
               children: [
-                KeyValueRow(label: 'إجمالي العقد الأساسي', value: AppFormatters.formatMoney(_hallPrice)),
-                KeyValueRow(label: 'الخدمات الإضافية المختارة', value: AppFormatters.formatMoney(_servicesTotal)),
+                KeyValueRow(
+                    label: 'إجمالي العقد الأساسي',
+                    value: AppFormatters.formatMoney(_hallPrice)),
+                KeyValueRow(
+                    label: 'الخدمات الإضافية المختارة',
+                    value: AppFormatters.formatMoney(_servicesTotal)),
                 const Divider(color: AppColors.line, height: 16),
                 KeyValueRow(
                   label: 'المبلغ الإجمالي المستحق',
                   value: AppFormatters.formatMoney(_totalAmount),
-                  valueStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.ink),
+                  valueStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: AppColors.ink),
                 ),
                 KeyValueRow(
                   label: 'المبلغ المتبقي تلقائياً',
                   value: AppFormatters.formatMoney(_remainingAmount),
-                  valueStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.amberText),
+                  valueStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: AppColors.amberText),
                 ),
               ],
             ),
@@ -436,18 +571,41 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
       child: Column(
         children: _selectedServices.keys.map((service) {
           final isSelected = _selectedServices[service]!;
-          final price = _servicePrices[service]!;
+          final price = _servicePrice(service);
 
-          return CheckboxListTile(
-            activeColor: AppColors.primary,
-            title: Text(service, style: AppTextStyles.body),
-            subtitle: Text(AppFormatters.formatMoney(price), style: const TextStyle(color: AppColors.green, fontWeight: FontWeight.bold)),
-            value: isSelected,
-            onChanged: (val) {
-              setState(() {
-                _selectedServices[service] = val ?? false;
-              });
-            },
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CheckboxListTile(
+                activeColor: AppColors.primary,
+                title: Text(service, style: AppTextStyles.body),
+                subtitle: Text(
+                  _servicePriceControllers.containsKey(service) && price == 0
+                      ? 'أدخل السعر المتفق عليه'
+                      : AppFormatters.formatMoney(price),
+                  style: const TextStyle(
+                      color: AppColors.green, fontWeight: FontWeight.bold),
+                ),
+                value: isSelected,
+                onChanged: (val) {
+                  setState(() {
+                    _selectedServices[service] = val ?? false;
+                  });
+                },
+              ),
+              if (isSelected && _servicePriceControllers.containsKey(service))
+                Padding(
+                  padding:
+                      const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+                  child: AppTextField(
+                    label: 'سعر $service',
+                    hint: 'أدخل السعر بالجنيه',
+                    controller: _servicePriceControllers[service],
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+            ],
           );
         }).toList(),
       ),
@@ -492,18 +650,37 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
           child: Column(
             children: [
               KeyValueRow(label: 'القاعة', value: _selectedHallName),
-              KeyValueRow(label: 'التاريخ', value: AppFormatters.formatFullDate(_selectedDate)),
+              KeyValueRow(
+                  label: 'التاريخ',
+                  value: AppFormatters.formatFullDate(_selectedDate)),
               KeyValueRow(label: 'الفترة', value: _selectedTimeSlot),
               KeyValueRow(label: 'اسم العميل', value: _nameController.text),
               KeyValueRow(label: 'رقم الهاتف', value: _phoneController.text),
               KeyValueRow(label: 'المناسبة', value: _selectedEventType),
-              KeyValueRow(label: 'عدد المقاعد', value: '${_seatsController.text} مقعد'),
+              KeyValueRow(
+                  label: 'عدد المقاعد', value: '${_seatsController.text} مقعد'),
               const Divider(color: AppColors.line, height: 16),
-              KeyValueRow(label: 'سعر القاعة', value: AppFormatters.formatMoney(_hallPrice)),
-              KeyValueRow(label: 'الخدمات الإضافية', value: AppFormatters.formatMoney(_servicesTotal)),
-              KeyValueRow(label: 'إجمالي العقد', value: AppFormatters.formatMoney(_totalAmount), valueStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              KeyValueRow(label: 'العربون المسدد', value: AppFormatters.formatMoney(_depositAmount), valueStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.green)),
-              KeyValueRow(label: 'المتبقي', value: AppFormatters.formatMoney(_remainingAmount), valueStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.amberText)),
+              KeyValueRow(
+                  label: 'سعر القاعة',
+                  value: AppFormatters.formatMoney(_hallPrice)),
+              KeyValueRow(
+                  label: 'الخدمات الإضافية',
+                  value: AppFormatters.formatMoney(_servicesTotal)),
+              KeyValueRow(
+                  label: 'إجمالي العقد',
+                  value: AppFormatters.formatMoney(_totalAmount),
+                  valueStyle: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+              KeyValueRow(
+                  label: 'العربون المسدد',
+                  value: AppFormatters.formatMoney(_depositAmount),
+                  valueStyle: const TextStyle(
+                      fontWeight: FontWeight.bold, color: AppColors.green)),
+              KeyValueRow(
+                  label: 'المتبقي',
+                  value: AppFormatters.formatMoney(_remainingAmount),
+                  valueStyle: const TextStyle(
+                      fontWeight: FontWeight.bold, color: AppColors.amberText)),
             ],
           ),
         ),
@@ -513,7 +690,8 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
 
   void _onNextPressed() async {
     if (_currentStep == 2) {
-      if (_nameController.text.trim().isEmpty || _phoneController.text.trim().isEmpty) {
+      if (_nameController.text.trim().isEmpty ||
+          _phoneController.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('يرجى إدخال اسم العميل ورقم الهاتف')),
         );
@@ -524,62 +702,169 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
     if (_currentStep < _totalSteps - 1) {
       setState(() => _currentStep++);
     } else {
+      final missingServicePrice = _servicePriceControllers.entries.any(
+        (entry) =>
+            _selectedServices[entry.key] == true &&
+            entry.value.text.trim().isEmpty,
+      );
+      if (missingServicePrice) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى إدخال سعر الجاتوه والمشروبات المختارة'),
+          ),
+        );
+        return;
+      }
+
       // Final confirmation & save
       setState(() => _isLoading = true);
       final bookingId = 1000 + DateTime.now().millisecondsSinceEpoch % 9000;
+      var bookingCreated = false;
 
       final servicesList = _selectedServices.entries.map((e) {
         return ServiceItem(
           id: 'serv_${e.key}',
           name: e.key,
-          price: _servicePrices[e.key] ?? 0,
-          status: e.value ? BookingServiceStatus.booked : BookingServiceStatus.optional,
+          price: _servicePrice(e.key),
+          status: e.value
+              ? BookingServiceStatus.booked
+              : BookingServiceStatus.optional,
         );
       }).toList();
 
-      final booking = Booking(
-        id: bookingId,
-        hallId: _selectedHallId,
-        hallName: _selectedHallName,
-        customerId: 'cust_${DateTime.now().millisecondsSinceEpoch}',
-        customerName: _nameController.text.trim(),
-        customerPhone: _phoneController.text.trim(),
-        eventType: _selectedEventType,
-        eventDate: _selectedDate,
-        timeRange: _selectedTimeSlot,
-        seatsCount: int.tryParse(_seatsController.text.trim()) ?? 400,
-        hallPrice: _hallPrice,
-        services: servicesList,
-        payments: [
-          if (_depositAmount > 0)
-            LedgerEntry(
-              id: 'dep_$bookingId',
-              bookingId: bookingId.toString(),
-              type: 'deposit',
-              amount: _depositAmount,
-              date: DateTime.now(),
-              paymentMethod: _paymentMethod,
-              receiverName: 'أحمد',
-              note: 'عربون الحجز الأولي',
-            ),
-        ],
-        eventNotes: _eventNotesController.text.trim().isEmpty ? null : _eventNotesController.text.trim(),
-        setupNotes: _setupNotesController.text.trim().isEmpty ? null : _setupNotesController.text.trim(),
-        internalNotes: _internalNotesController.text.trim().isEmpty ? null : _internalNotesController.text.trim(),
-        activityLog: [
-          'تم إنشاء الحجز رقم #$bookingId وتأكيده بنجاح',
-          if (_depositAmount > 0) 'تم تحصيل عربون بقيمة $_depositAmount ج.م',
-        ],
-      );
-
-      await ServicesLocator.bookingsRepo.addBooking(booking);
-
-      if (mounted) {
-        context.pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم إنشاء الحجز رقم #${bookingId.toArabicDigits()} بنجاح')),
+      try {
+        final customer = await _findOrCreateCustomer();
+        final booking = Booking(
+          id: bookingId,
+          hallId: _selectedHallId,
+          hallName: _selectedHallName,
+          customerId: customer.id,
+          customerName: _nameController.text.trim(),
+          customerPhone: _phoneController.text.trim(),
+          eventType: _selectedEventType,
+          eventDate: _selectedDate,
+          timeRange: _selectedTimeSlot,
+          seatsCount: int.tryParse(_seatsController.text.trim()) ?? 400,
+          hallPrice: _hallPrice,
+          services: servicesList,
+          payments: [
+            if (_depositAmount > 0)
+              LedgerEntry(
+                id: 'dep_$bookingId',
+                bookingId: bookingId.toString(),
+                type: 'deposit',
+                amount: _depositAmount,
+                date: DateTime.now(),
+                paymentMethod: _paymentMethod,
+                receiverName: 'أحمد',
+                note: 'عربون الحجز الأولي',
+              ),
+          ],
+          eventNotes: _eventNotesController.text.trim().isEmpty
+              ? null
+              : _eventNotesController.text.trim(),
+          setupNotes: _setupNotesController.text.trim().isEmpty
+              ? null
+              : _setupNotesController.text.trim(),
+          internalNotes: _internalNotesController.text.trim().isEmpty
+              ? null
+              : _internalNotesController.text.trim(),
+          activityLog: [
+            'تم إنشاء الحجز رقم #$bookingId وتأكيده بنجاح',
+            if (_depositAmount > 0) 'تم تحصيل عربون بقيمة $_depositAmount ج.م',
+          ],
         );
+
+        final savedBookingId =
+            await ServicesLocator.bookingsRepo.addBooking(booking);
+        bookingCreated = true;
+        if (_depositAmount > 0) {
+          await ServicesLocator.bookingsRepo.addPayment(
+            bookingId: savedBookingId,
+            amount: _depositAmount,
+            paymentMethod: _paymentMethod,
+            receiverName: 'أحمد',
+            note: 'عربون الحجز الأولي',
+          );
+        }
+        ServicesLocator.calendarRepo.invalidateCache(hallId: _selectedHallId);
+
+        if (mounted) {
+          context.pop(true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(
+                    'تم إنشاء الحجز رقم #${bookingId.toArabicDigits()} بنجاح')),
+          );
+        }
+      } catch (error) {
+        if (bookingCreated) {
+          ServicesLocator.calendarRepo.invalidateCache(hallId: _selectedHallId);
+        }
+        if (mounted) {
+          final errorMessage =
+              error is ApiException ? error.message : error.toString();
+          final message = bookingCreated
+              ? 'تم حفظ الحجز، لكن تعذر تسجيل العربون. لا تُعد إنشاء الحجز؛ سجّل الدفعة من تفاصيله. $errorMessage'
+              : 'تعذر إنشاء الحجز: $errorMessage';
+          if (bookingCreated) {
+            context.pop(true);
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
+  }
+
+  Future<Customer> _findOrCreateCustomer() async {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final normalizedPhone = _normalizePhone(phone);
+    final existingCustomers =
+        await ServicesLocator.customersRepo.getCustomers(search: phone);
+    for (final customer in existingCustomers) {
+      if (_normalizePhone(customer.phone) == normalizedPhone) {
+        if (!_isUuid(customer.id)) {
+          throw StateError('بيانات العميل المحفوظة تحتوي على معرّف غير صالح.');
+        }
+        return customer;
+      }
+    }
+
+    final customer = await ServicesLocator.customersRepo.addCustomer(
+      Customer(
+        id: '',
+        name: name,
+        phone: phone,
+        totalBookings: 0,
+        totalSpent: 0,
+      ),
+    );
+    if (!_isUuid(customer.id)) {
+      throw StateError('لم يُرجع الخادم معرّف عميل صالحًا للحجز.');
+    }
+    return customer;
+  }
+
+  bool _isUuid(String value) => RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      ).hasMatch(value);
+
+  String _normalizePhone(String phone) {
+    final westernDigits = phone.replaceAllMapped(
+      RegExp('[٠-٩۰-۹]'),
+      (match) {
+        final digit = match[0]!.codeUnitAt(0);
+        final asciiDigit = digit >= 0x06f0 ? digit - 0x06f0 : digit - 0x0660;
+        return String.fromCharCode(0x30 + asciiDigit);
+      },
+    );
+    return westernDigits.replaceAll(RegExp(r'[^0-9]'), '');
   }
 }

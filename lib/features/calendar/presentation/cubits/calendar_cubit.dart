@@ -15,6 +15,7 @@ class CalendarLoading extends CalendarState {
 }
 
 class CalendarLoaded extends CalendarState {
+  final String hallId;
   final DateTime currentMonth;
   final int selectedDay;
   final String activeFilter; // 'all', 'deposit', 'paid', 'tentative'
@@ -23,6 +24,7 @@ class CalendarLoaded extends CalendarState {
   final List<RemainingPaymentItem> remainingPayments;
 
   const CalendarLoaded({
+    required this.hallId,
     required this.currentMonth,
     required this.selectedDay,
     required this.activeFilter,
@@ -40,6 +42,7 @@ class CalendarLoaded extends CalendarState {
   }
 
   CalendarLoaded copyWith({
+    String? hallId,
     DateTime? currentMonth,
     int? selectedDay,
     String? activeFilter,
@@ -48,6 +51,7 @@ class CalendarLoaded extends CalendarState {
     List<RemainingPaymentItem>? remainingPayments,
   }) {
     return CalendarLoaded(
+      hallId: hallId ?? this.hallId,
       currentMonth: currentMonth ?? this.currentMonth,
       selectedDay: selectedDay ?? this.selectedDay,
       activeFilter: activeFilter ?? this.activeFilter,
@@ -63,17 +67,37 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   CalendarCubit(this._repository) : super(const CalendarInitial());
 
-  Future<void> loadCalendar({String hallId = 'masia', DateTime? month}) async {
+  Future<void> loadCalendar({
+    String hallId = 'masia',
+    DateTime? month,
+    int? selectedDay,
+  }) async {
+    final previousState = state;
+    final today = DateTime.now();
+    final targetMonth = month ?? DateTime(today.year, today.month, 1);
+    final daysInMonth =
+        DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+    final defaultSelectedDay =
+        targetMonth.year == today.year && targetMonth.month == today.month
+            ? today.day
+            : previousState is CalendarLoaded
+                ? previousState.selectedDay
+                : 1;
+    final targetSelectedDay =
+        (selectedDay ?? defaultSelectedDay).clamp(1, daysInMonth).toInt();
+
     emit(const CalendarLoading());
     try {
-      final targetMonth = month ?? DateTime(2026, 12, 1);
-      final days = await _repository.getCalendarDays(hallId: hallId, month: targetMonth);
-      final summary = await _repository.getMonthSummary(hallId: hallId, month: targetMonth);
+      final days =
+          await _repository.getCalendarDays(hallId: hallId, month: targetMonth);
+      final summary =
+          await _repository.getMonthSummary(hallId: hallId, month: targetMonth);
       final remaining = await _repository.getRemainingPayments(hallId: hallId);
 
       emit(CalendarLoaded(
+        hallId: hallId,
         currentMonth: targetMonth,
-        selectedDay: 15, // Default selected is 15 as in screenshot
+        selectedDay: targetSelectedDay,
         activeFilter: 'all',
         days: days,
         summary: summary,
@@ -98,19 +122,35 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   void nextMonth() {
     if (state is CalendarLoaded) {
-      final cur = (state as CalendarLoaded).currentMonth;
-      loadCalendar(month: DateTime(cur.year, cur.month + 1, 1));
+      final current = state as CalendarLoaded;
+      final cur = current.currentMonth;
+      loadCalendar(
+        hallId: current.hallId,
+        month: DateTime(cur.year, cur.month + 1, 1),
+        selectedDay: current.selectedDay,
+      );
     }
   }
 
   void prevMonth() {
     if (state is CalendarLoaded) {
-      final cur = (state as CalendarLoaded).currentMonth;
-      loadCalendar(month: DateTime(cur.year, cur.month - 1, 1));
+      final current = state as CalendarLoaded;
+      final cur = current.currentMonth;
+      loadCalendar(
+        hallId: current.hallId,
+        month: DateTime(cur.year, cur.month - 1, 1),
+        selectedDay: current.selectedDay,
+      );
     }
   }
 
   void goToToday() {
-    loadCalendar(month: DateTime(2026, 12, 1));
+    final current = state;
+    final today = DateTime.now();
+    loadCalendar(
+      hallId: current is CalendarLoaded ? current.hallId : 'masia',
+      month: DateTime(today.year, today.month, 1),
+      selectedDay: today.day,
+    );
   }
 }

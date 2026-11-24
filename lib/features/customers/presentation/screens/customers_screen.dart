@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
@@ -63,14 +64,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'سجل العملاء',
                 subtitle: 'إدارة بيانات العملاء وتاريخ حجوزاتهم والمدفوعات',
                 showBackButton: false,
                 actions: [
                   CircleIconButton.primary(
-                    icon: const Icon(LucideIcons.userPlus, size: 20, color: AppColors.white),
+                    icon: const Icon(LucideIcons.userPlus,
+                        size: 20, color: AppColors.white),
                     onTap: _showAddCustomerSheet,
                   ),
                 ],
@@ -83,7 +86,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
               child: AppTextField(
                 hint: 'بحث باسم العميل أو رقم الهاتف...',
                 controller: _searchController,
-                prefixIcon: const Icon(LucideIcons.search, size: 18, color: AppColors.muted),
+                prefixIcon: const Icon(LucideIcons.search,
+                    size: 18, color: AppColors.muted),
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -91,16 +95,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
             // Customers list
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppListSkeleton(itemCount: 4)
                   : _filteredCustomers.isEmpty
                       ? const EmptyState(
                           title: 'لا يوجد عملاء مطابقون',
-                          subtitle: 'يمكنك إضافة عميل جديد باستخدام الزر العلوي.',
+                          subtitle:
+                              'يمكنك إضافة عميل جديد باستخدام الزر العلوي.',
                         )
                       : RefreshIndicator(
                           onRefresh: _fetchCustomers,
                           child: ListView.builder(
-                            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 100, top: 8),
+                            padding: const EdgeInsets.only(
+                                left: 16, right: 16, bottom: 100, top: 8),
                             itemCount: _filteredCustomers.length,
                             itemBuilder: (context, i) {
                               final customer = _filteredCustomers[i];
@@ -133,7 +139,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
             color: AppColors.primarySoftText.withValues(alpha: 0.3),
             shape: BoxShape.circle,
           ),
-          child: const Icon(LucideIcons.user, color: AppColors.primary, size: 22),
+          child:
+              const Icon(LucideIcons.user, color: AppColors.primary, size: 22),
         ),
         title: Text(customer.name, style: AppTextStyles.cardTitle),
         subtitle: Column(
@@ -142,14 +149,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
             const SizedBox(height: 2),
             Text(customer.phone, style: AppTextStyles.muted),
             const SizedBox(height: 2),
-            Text('عدد الحجوزات: ${customer.totalBookings.toArabicDigits()}', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+            Text('عدد الحجوزات: ${customer.totalBookings.toArabicDigits()}',
+                style: const TextStyle(fontSize: 11, color: AppColors.muted)),
           ],
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Text('إجمالي المدفوعات', style: TextStyle(fontSize: 10, color: AppColors.muted)),
+            const Text('إجمالي المدفوعات',
+                style: TextStyle(fontSize: 10, color: AppColors.muted)),
             Text(
               AppFormatters.formatMoney(customer.totalSpent),
               style: const TextStyle(
@@ -177,9 +186,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
         children: [
           AppTextField(label: 'اسم العميل', controller: nameCtrl),
           const SizedBox(height: 10),
-          AppTextField(label: 'رقم الهاتف', controller: phoneCtrl, keyboardType: TextInputType.phone),
+          AppTextField(
+              label: 'رقم الهاتف',
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone),
           const SizedBox(height: 10),
-          AppTextField(label: 'البريد الإلكتروني (اختياري)', controller: emailCtrl, keyboardType: TextInputType.emailAddress),
+          AppTextField(
+              label: 'البريد الإلكتروني (اختياري)',
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress),
           const SizedBox(height: 16),
           AppPrimaryButton(
             text: 'حفظ العميل',
@@ -189,7 +204,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   id: 'cust_${DateTime.now().millisecondsSinceEpoch}',
                   name: nameCtrl.text.trim(),
                   phone: phoneCtrl.text.trim(),
-                  email: emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
+                  email: emailCtrl.text.trim().isEmpty
+                      ? null
+                      : emailCtrl.text.trim(),
                   totalBookings: 0,
                   totalSpent: 0,
                 );
@@ -216,32 +233,44 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ListTile(
             leading: const Icon(LucideIcons.phone, color: AppColors.primary),
             title: Text(customer.phone, style: AppTextStyles.body),
-            subtitle: const Text('رقم الهاتف الأساسي', style: TextStyle(fontSize: 11)),
+            subtitle: const Text('رقم الهاتف الأساسي',
+                style: TextStyle(fontSize: 11)),
           ),
           if (customer.email != null)
             ListTile(
               leading: const Icon(LucideIcons.mail, color: AppColors.primary),
               title: Text(customer.email!, style: AppTextStyles.body),
-              subtitle: const Text('البريد الإلكتروني', style: TextStyle(fontSize: 11)),
+              subtitle: const Text('البريد الإلكتروني',
+                  style: TextStyle(fontSize: 11)),
             ),
           ListTile(
-            leading: const Icon(LucideIcons.calendarCheck, color: AppColors.primary),
-            title: Text('${customer.totalBookings.toArabicDigits()} حجوزات سابقة وحالية', style: AppTextStyles.body),
-            subtitle: const Text('سجل الحجوزات', style: TextStyle(fontSize: 11)),
+            leading:
+                const Icon(LucideIcons.calendarCheck, color: AppColors.primary),
+            title: Text(
+                '${customer.totalBookings.toArabicDigits()} حجوزات سابقة وحالية',
+                style: AppTextStyles.body),
+            subtitle:
+                const Text('سجل الحجوزات', style: TextStyle(fontSize: 11)),
           ),
           ListTile(
-            leading: const Icon(LucideIcons.badgePercent, color: AppColors.green),
-            title: Text(AppFormatters.formatMoney(customer.totalSpent), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.green)),
-            subtitle: const Text('إجمالي قيمة العقود المسددة', style: TextStyle(fontSize: 11)),
+            leading:
+                const Icon(LucideIcons.badgePercent, color: AppColors.green),
+            title: Text(AppFormatters.formatMoney(customer.totalSpent),
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: AppColors.green)),
+            subtitle: const Text('إجمالي قيمة العقود المسددة',
+                style: TextStyle(fontSize: 11)),
           ),
-          const SizedBox(height: 14),
-          AppPrimaryButton(
-            text: 'إنشاء حجز جديد لهذا العميل',
-            onPressed: () {
-              Navigator.pop(context);
-              context.push('/bookings/new');
-            },
-          ),
+          if (PermissionGuard.canManageBookings) ...[
+            const SizedBox(height: 14),
+            AppPrimaryButton(
+              text: 'إنشاء حجز جديد لهذا العميل',
+              onPressed: () {
+                Navigator.pop(context);
+                context.push('/bookings/new');
+              },
+            ),
+          ],
         ],
       ),
     );

@@ -59,7 +59,8 @@ class BookingDetailsCubit extends Cubit<BookingDetailsState> {
     }
   }
 
-  Future<void> toggleServiceStatus(String serviceId, BookingServiceStatus newStatus) async {
+  Future<void> toggleServiceStatus(
+      String serviceId, BookingServiceStatus newStatus) async {
     if (state is BookingDetailsLoaded) {
       final current = (state as BookingDetailsLoaded).booking;
       await _repository.toggleServiceStatus(current.id, serviceId, newStatus);
@@ -75,11 +76,26 @@ class BookingDetailsCubit extends Cubit<BookingDetailsState> {
     }
   }
 
-  Future<void> cancelBooking(String reason, String refundDecision) async {
+  Future<BookingCancellationResult?> cancelBooking({
+    required String reason,
+    required bool refund,
+    int refundAmount = 0,
+    String refundMethod = 'cash',
+    String? refundNotes,
+  }) async {
     if (state is BookingDetailsLoaded) {
       final current = (state as BookingDetailsLoaded).booking;
-      await _repository.cancelBooking(current.id, reason, refundDecision);
+      final result = await _repository.cancelBooking(
+        bookingId: current.id,
+        reason: reason,
+        refund: refund,
+        refundAmount: refundAmount,
+        refundMethod: refundMethod,
+        refundNotes: refundNotes,
+      );
       await loadBooking(current.id);
+      return result;
     }
+    return null;
   }
 }

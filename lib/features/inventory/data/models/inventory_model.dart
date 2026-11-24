@@ -1,3 +1,7 @@
+import 'package:dio/dio.dart';
+import 'package:qa3ty_app/core/networking/api_exceptions.dart';
+import 'package:qa3ty_app/core/networking/dio_factory.dart';
+
 enum MovementType {
   purchase, // مشتريات (+ أخضر)
   issue, // صرف
@@ -73,6 +77,128 @@ abstract class InventoryRepository {
   Future<void> addItem(InventoryItem item);
   Future<void> updateItem(InventoryItem item);
   Future<void> recordMovement(StockMovement movement);
+}
+
+class RemoteInventoryRepository implements InventoryRepository {
+  final Dio _dio = DioFactory.getDio();
+
+  @override
+  Future<List<InventoryItem>> getItems() async {
+    try {
+      final response = await _dio.get('/inventory');
+      final data = response.data;
+      final List rawItems = (data is Map && data['data'] != null)
+          ? (data['data'] is Map ? (data['data']['items'] ?? []) : data['data'])
+          : (data is List ? data : []);
+
+      return rawItems.map<InventoryItem>((item) {
+        return InventoryItem(
+          id: item['id']?.toString() ?? '',
+          name: item['name']?.toString() ?? '',
+          category: item['category']?.toString() ?? 'عام',
+          quantity: ((item['current_stock'] ?? item['quantity'] ?? 0) as num).toInt(),
+          unit: item['unit']?.toString() ?? 'قطعة',
+          minAlertQuantity: ((item['min_stock'] ?? item['min_alert_quantity'] ?? 5) as num).toInt(),
+          unitCost: ((item['unit_cost'] ?? 0) as num).round(),
+        );
+      }).toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<List<StockMovement>> getMovements() async {
+    try {
+      final response = await _dio.get('/inventory/movements');
+      final data = response.data;
+      final List rawItems = (data is Map && data['data'] != null)
+          ? (data['data'] is Map ? (data['data']['items'] ?? []) : data['data'])
+          : (data is List ? data : []);
+
+      return rawItems.map<StockMovement>((item) {
+        MovementType mType = MovementType.consumption;
+        final tStr = (item['movement_type']?.toString() ?? '').toLowerCase();
+        if (tStr == 'purchase') {
+          mType = MovementType.purchase;
+        } else if (tStr == 'issue') {
+          mType = MovementType.issue;
+        } else if (tStr == 'waste') {
+          mType = MovementType.waste;
+        }
+
+        DateTime d = DateTime.now();
+        final rawDate = item['created_at'] ?? item['movement_date'] ?? item['date'];
+        if (rawDate != null) {
+          d = DateTime.tryParse(rawDate.toString()) ?? DateTime.now();
+        }
+
+        return StockMovement(
+          id: item['id']?.toString() ?? '',
+          itemId: item['inventory_item_id']?.toString() ?? '',
+          itemName: item['inventory_items']?['name']?.toString() ?? item['item_name']?.toString() ?? '',
+          type: mType,
+          quantity: ((item['quantity'] ?? 0) as num).toInt(),
+          date: d,
+          reason: item['notes']?.toString() ?? item['reason']?.toString(),
+        );
+      }).toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> addItem(InventoryItem item) async {
+    try {
+      await _dio.post(
+        '/inventory',
+        data: {
+          'name': item.name,
+          'unit': item.unit,
+          'unit_cost': item.unitCost.toDouble(),
+          'min_stock': item.minAlertQuantity,
+          'category': item.category,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> updateItem(InventoryItem item) async {
+    try {
+      await _dio.put(
+        '/inventory/${item.id}',
+        data: {
+          'name': item.name,
+          'unit': item.unit,
+          'unit_cost': item.unitCost.toDouble(),
+          'min_stock': item.minAlertQuantity,
+        },
+      );
+    } on DioException catch (_) {
+      // Backend does not expose PUT /inventory/:id yet per Section 8.12
+    }
+  }
+
+  @override
+  Future<void> recordMovement(StockMovement movement) async {
+    try {
+      await _dio.post(
+        '/inventory/movements',
+        data: {
+          'inventory_item_id': movement.itemId,
+          'movement_type': movement.type.name,
+          'quantity': movement.quantity,
+          if (movement.reason != null && movement.reason!.isNotEmpty) 'notes': movement.reason,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
 }
 
 class MockInventoryRepository implements InventoryRepository {

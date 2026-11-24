@@ -9,6 +9,7 @@ import 'package:qa3ty_app/core/utils/widgets/circle_icon_button.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_buttons.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_bottom_sheet.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_text_field.dart';
+import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../../data/models/inventory_model.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -58,13 +59,15 @@ class _InventoryScreenState extends State<InventoryScreen>
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
+              padding: const EdgeInsets.only(
+                  top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'إدارة المخزون والمستلزمات',
                 subtitle: 'متابعة الأرصدة وتنبيهات النواقص وسجل الحركات',
                 actions: [
                   CircleIconButton.primary(
-                    icon: const Icon(LucideIcons.plus, size: 20, color: AppColors.white),
+                    icon: const Icon(LucideIcons.plus,
+                        size: 20, color: AppColors.white),
                     onTap: _showAddItemBottomSheet,
                   ),
                 ],
@@ -103,7 +106,7 @@ class _InventoryScreenState extends State<InventoryScreen>
             // Tab Content
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppListSkeleton(itemCount: 4)
                   : TabBarView(
                       controller: _tabController,
                       children: [
@@ -146,22 +149,30 @@ class _InventoryScreenState extends State<InventoryScreen>
                         children: [
                           Text(item.name, style: AppTextStyles.cardTitle),
                           const SizedBox(height: 2),
-                          Text('${item.category} · تكلفة الوحدة: ${AppFormatters.formatMoney(item.unitCost)}', style: AppTextStyles.muted),
+                          Text(
+                              '${item.category} · تكلفة الوحدة: ${AppFormatters.formatMoney(item.unitCost)}',
+                              style: AppTextStyles.muted),
                         ],
                       ),
                     ),
                     if (item.isLowStock)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: AppColors.redBg,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Row(
                           children: [
-                            Icon(LucideIcons.alertTriangle, size: 12, color: AppColors.red),
+                            Icon(LucideIcons.alertTriangle,
+                                size: 12, color: AppColors.red),
                             SizedBox(width: 4),
-                            Text('رصيد منخفض', style: TextStyle(color: AppColors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                            Text('رصيد منخفض',
+                                style: TextStyle(
+                                    color: AppColors.red,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -195,7 +206,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                         height: 36,
                         textColor: AppColors.green,
                         borderColor: AppColors.green,
-                        onPressed: () => _showMovementDialog(item, MovementType.purchase),
+                        onPressed: () =>
+                            _showMovementDialog(item, MovementType.purchase),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -203,7 +215,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                       child: AppSecondaryButton(
                         text: 'صرف لمناسبة',
                         height: 36,
-                        onPressed: () => _showMovementDialog(item, MovementType.consumption),
+                        onPressed: () =>
+                            _showMovementDialog(item, MovementType.consumption),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -213,7 +226,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                         height: 36,
                         textColor: AppColors.red,
                         borderColor: AppColors.red,
-                        onPressed: () => _showMovementDialog(item, MovementType.waste),
+                        onPressed: () =>
+                            _showMovementDialog(item, MovementType.waste),
                       ),
                     ),
                   ],
@@ -244,14 +258,18 @@ class _InventoryScreenState extends State<InventoryScreen>
           ),
           child: ListTile(
             title: Text(mov.itemName, style: AppTextStyles.cardTitle),
-            subtitle: Text('${mov.reason ?? ""} · ${AppFormatters.formatDayMonth(mov.date)}', style: AppTextStyles.muted),
+            subtitle: Text(
+                '${mov.reason ?? ""} · ${AppFormatters.formatDayMonth(mov.date)}',
+                style: AppTextStyles.muted),
             trailing: Text(
               '${isPurchase ? "+" : "-"}${mov.quantity.toArabicDigits()}',
               style: TextStyle(
                 fontFamily: AppTextStyles.fontFamily,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: isPurchase ? AppColors.green : (isWaste ? AppColors.red : AppColors.ink),
+                color: isPurchase
+                    ? AppColors.green
+                    : (isWaste ? AppColors.red : AppColors.ink),
               ),
             ),
           ),
@@ -279,17 +297,31 @@ class _InventoryScreenState extends State<InventoryScreen>
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: AppTextField(label: 'الكمية الابتدائية', controller: qtyCtrl, keyboardType: TextInputType.number)),
+              Expanded(
+                  child: AppTextField(
+                      label: 'الكمية الابتدائية',
+                      controller: qtyCtrl,
+                      keyboardType: TextInputType.number)),
               const SizedBox(width: 10),
-              Expanded(child: AppTextField(label: 'الوحدة (علبة/كرتونة)', controller: unitCtrl)),
+              Expanded(
+                  child: AppTextField(
+                      label: 'الوحدة (علبة/كرتونة)', controller: unitCtrl)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: AppTextField(label: 'حد التنبيه الأدنى', controller: minCtrl, keyboardType: TextInputType.number)),
+              Expanded(
+                  child: AppTextField(
+                      label: 'حد التنبيه الأدنى',
+                      controller: minCtrl,
+                      keyboardType: TextInputType.number)),
               const SizedBox(width: 10),
-              Expanded(child: AppTextField(label: 'تكلفة الوحدة (ج.م)', controller: costCtrl, keyboardType: TextInputType.number)),
+              Expanded(
+                  child: AppTextField(
+                      label: 'تكلفة الوحدة (ج.م)',
+                      controller: costCtrl,
+                      keyboardType: TextInputType.number)),
             ],
           ),
           const SizedBox(height: 16),
@@ -323,7 +355,9 @@ class _InventoryScreenState extends State<InventoryScreen>
     final qtyCtrl = TextEditingController();
     final reasonCtrl = TextEditingController();
 
-    String typeLabel = type == MovementType.purchase ? 'شراء توريد' : (type == MovementType.waste ? 'تسجيل هالك' : 'صرف لمناسبة');
+    String typeLabel = type == MovementType.purchase
+        ? 'شراء توريد'
+        : (type == MovementType.waste ? 'تسجيل هالك' : 'صرف لمناسبة');
 
     showDialog(
       context: context,
@@ -349,7 +383,8 @@ class _InventoryScreenState extends State<InventoryScreen>
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {

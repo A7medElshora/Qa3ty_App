@@ -1,3 +1,7 @@
+import 'package:dio/dio.dart';
+import 'package:qa3ty_app/core/networking/api_exceptions.dart';
+import 'package:qa3ty_app/core/networking/dio_factory.dart';
+
 enum NotificationType {
   upcomingEvent, // مناسبة قريبة
   remainingDue, // مبلغ متبقٍ
@@ -49,6 +53,83 @@ abstract class NotificationsRepository {
   Future<List<AppNotification>> getNotifications();
   Future<void> markAsRead(String id);
   Future<void> markAllAsRead();
+}
+
+class RemoteNotificationsRepository implements NotificationsRepository {
+  final Dio _dio = DioFactory.getDio();
+
+  @override
+  Future<List<AppNotification>> getNotifications() async {
+    try {
+      final response = await _dio.get('/notifications');
+      final data = response.data;
+      final List rawItems = (data is Map && data['data'] != null)
+          ? (data['data'] is Map ? (data['data']['items'] ?? []) : data['data'])
+          : (data is List ? data : []);
+
+      return rawItems.map<AppNotification>((item) {
+        NotificationType nType = NotificationType.upcomingEvent;
+        final typeStr = item['type']?.toString().toLowerCase() ?? '';
+        if (typeStr.contains('due') || typeStr.contains('remaining')) {
+          nType = NotificationType.remainingDue;
+        } else if (typeStr.contains('payment')) {
+          nType = NotificationType.paymentReceived;
+        } else if (typeStr.contains('stock')) {
+          nType = NotificationType.lowStock;
+        }
+
+        DateTime d = DateTime.now();
+        final rawDate = item['created_at'] ?? item['date'];
+        if (rawDate != null) {
+          d = DateTime.tryParse(rawDate.toString()) ?? DateTime.now();
+        }
+
+        return AppNotification(
+          id: item['id']?.toString() ?? '',
+          title: item['title']?.toString() ?? '',
+          message: item['message']?.toString() ?? '',
+          date: d,
+          type: nType,
+          isRead: item['is_read'] == true,
+          route: item['route']?.toString() ?? item['action_url']?.toString(),
+        );
+      }).toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> markAsRead(String id) async {
+    try {
+      await _dio.patch('/notifications/$id/read');
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
+
+  @override
+  Future<void> markAllAsRead() async {
+    try {
+      await _dio.patch('/notifications/read-all');
+    } on DioException catch (_) {
+      // If endpoint doesn't support bulk, ignore or fallback
+    }
+  }
+
+  Future<void> registerDeviceToken({required String fcmToken, String? deviceLabel}) async {
+    try {
+      await _dio.post(
+        '/device-tokens',
+        data: {
+          'token': fcmToken,
+          'device_label': deviceLabel ?? 'Flutter Client',
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
+  }
 }
 
 class MockNotificationsRepository implements NotificationsRepository {

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
+import 'package:qa3ty_app/core/networking/api_exceptions.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
@@ -16,6 +19,7 @@ import 'package:qa3ty_app/core/utils/widgets/app_buttons.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_bottom_sheet.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_text_field.dart';
 import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../cubits/booking_details_cubit.dart';
 import '../widgets/add_payment_bottom_sheet.dart';
 import '../../data/models/booking_model.dart';
@@ -55,7 +59,36 @@ class BookingDetailsView extends StatelessWidget {
         child: BlocBuilder<BookingDetailsCubit, BookingDetailsState>(
           builder: (context, state) {
             if (state is BookingDetailsLoading) {
-              return const Center(child: CircularProgressIndicator());
+              return const AppSkeletonizer(
+                child: Column(
+                  children: [
+                    const Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.only(
+                          top: 52,
+                          left: 16,
+                          right: 16,
+                          bottom: 24,
+                        ),
+                        child: Column(
+                          children: [
+                            AppSkeletonPanel(height: 72, lineCount: 1),
+                            SizedBox(height: 14),
+                            AppSkeletonPanel(height: 74, lineCount: 1),
+                            SizedBox(height: 14),
+                            AppSkeletonPanel(height: 140, lineCount: 3),
+                            SizedBox(height: 14),
+                            AppSkeletonPanel(height: 190, lineCount: 4),
+                            SizedBox(height: 14),
+                            AppSkeletonPanel(height: 220, lineCount: 5),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const AppSkeletonPanel(height: 76, lineCount: 1),
+                  ],
+                ),
+              );
             }
             if (state is BookingDetailsError) {
               return ErrorState(
@@ -153,9 +186,11 @@ class BookingDetailsView extends StatelessWidget {
                 ),
                 onTap: () {
                   if (Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
+                    Navigator.of(context).pop(
+                      booking.status == BookingLifecycleStatus.cancelled,
+                    );
                   } else {
-                    context.go('/calendar');
+                    context.go('/halls/${booking.hallId}/calendar');
                   }
                 },
               ),
@@ -205,29 +240,34 @@ class BookingDetailsView extends StatelessWidget {
             ),
           ),
           color: AppColors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           onSelected: (action) => _handleMenuAction(context, action, booking),
           itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(LucideIcons.edit3, size: 18, color: AppColors.ink),
-                  SizedBox(width: 10),
-                  Text('تعديل الحجز', style: AppTextStyles.body),
-                ],
+            if (PermissionGuard.canManageBookings &&
+                booking.status != BookingLifecycleStatus.cancelled)
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.edit3, size: 18, color: AppColors.ink),
+                    SizedBox(width: 10),
+                    Text('تعديل الحجز', style: AppTextStyles.body),
+                  ],
+                ),
               ),
-            ),
-            const PopupMenuItem(
-              value: 'reschedule',
-              child: Row(
-                children: [
-                  Icon(LucideIcons.calendar, size: 18, color: AppColors.ink),
-                  SizedBox(width: 10),
-                  Text('تغيير الموعد', style: AppTextStyles.body),
-                ],
+            if (PermissionGuard.canManageBookings &&
+                booking.status != BookingLifecycleStatus.cancelled)
+              const PopupMenuItem(
+                value: 'reschedule',
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.calendar, size: 18, color: AppColors.ink),
+                    SizedBox(width: 10),
+                    Text('تغيير الموعد', style: AppTextStyles.body),
+                  ],
+                ),
               ),
-            ),
             const PopupMenuItem(
               value: 'share',
               child: Row(
@@ -238,17 +278,24 @@ class BookingDetailsView extends StatelessWidget {
                 ],
               ),
             ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(
-              value: 'cancel',
-              child: Row(
-                children: [
-                  Icon(LucideIcons.trash2, size: 18, color: AppColors.red),
-                  SizedBox(width: 10),
-                  Text('إلغاء الحجز', style: TextStyle(color: AppColors.red, fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w600)),
-                ],
+            if (PermissionGuard.canManageBookings &&
+                booking.status != BookingLifecycleStatus.cancelled) ...[
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'cancel',
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.trash2, size: 18, color: AppColors.red),
+                    SizedBox(width: 10),
+                    Text('إلغاء الحجز',
+                        style: TextStyle(
+                            color: AppColors.red,
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ],
@@ -256,6 +303,21 @@ class BookingDetailsView extends StatelessWidget {
   }
 
   Widget _buildStatusBanner(Booking booking) {
+    if (booking.status == BookingLifecycleStatus.cancelled) {
+      return StatusBanner(
+        title: 'تم إلغاء الحجز',
+        subtitle: [
+          if (booking.cancellationReason?.isNotEmpty == true)
+            'السبب: ${booking.cancellationReason}',
+          'المبلغ المسترد: ${AppFormatters.formatMoney(booking.refundAmount)}',
+          'المبلغ المحتفظ به: ${AppFormatters.formatMoney(booking.retainedAmount)}',
+        ].join(' · '),
+        backgroundColor: AppColors.redBg,
+        dotColor: AppColors.red,
+        textColor: AppColors.red,
+      );
+    }
+
     if (booking.remainingAmount == 0) {
       return StatusBanner.paid(
         title: 'مدفوع بالكامل',
@@ -264,7 +326,8 @@ class BookingDetailsView extends StatelessWidget {
     }
 
     return StatusBanner.deposit(
-      title: 'عربون مدفوع · متبقي ${AppFormatters.formatMoney(booking.remainingAmount)}',
+      title:
+          'عربون مدفوع · متبقي ${AppFormatters.formatMoney(booking.remainingAmount)}',
       subtitle: 'الفعالية بعد ٢٤ يوماً · موعد سداد المتبقي ٥ ديسمبر',
     );
   }
@@ -345,22 +408,18 @@ class BookingDetailsView extends StatelessWidget {
                   _buildSmallActionButton(
                     icon: LucideIcons.phone,
                     label: 'اتصال',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('الاتصال بالرقم ${booking.customerPhone}')),
-                      );
-                    },
+                    onTap: () =>
+                        _launchCustomerPhone(context, booking.customerPhone),
                   ),
                   const SizedBox(width: 8),
                   _buildSmallActionButton(
                     icon: LucideIcons.messageSquare,
                     label: 'واتساب',
                     isBold: true,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('فتح محادثة واتساب مع ${booking.customerName}')),
-                      );
-                    },
+                    onTap: () => _launchWhatsApp(
+                      context,
+                      booking.customerPhone,
+                    ),
                   ),
                 ],
               ),
@@ -378,7 +437,8 @@ class BookingDetailsView extends StatelessWidget {
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppColors.purpleBg,
                   borderRadius: BorderRadius.circular(12),
@@ -409,6 +469,70 @@ class BookingDetailsView extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Future<void> _launchCustomerPhone(
+    BuildContext context,
+    String rawPhone,
+  ) async {
+    final phone = rawPhone.trim().replaceAll(RegExp(r'[^\d+]'), '');
+    if (phone.isEmpty) {
+      _showContactMessage(context, 'رقم هاتف العميل غير متوفر');
+      return;
+    }
+
+    final uri = Uri(scheme: 'tel', path: phone);
+    try {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!context.mounted) return;
+      if (!launched) {
+        _showContactMessage(context, 'تعذر فتح تطبيق الاتصال');
+      }
+    } on PlatformException {
+      if (context.mounted) {
+        _showContactMessage(context, 'تعذر فتح تطبيق الاتصال');
+      }
+    }
+  }
+
+  Future<void> _launchWhatsApp(
+    BuildContext context,
+    String rawPhone,
+  ) async {
+    final trimmedPhone = rawPhone.trim();
+    var phone = trimmedPhone.replaceAll(RegExp(r'\D'), '');
+    if (phone.startsWith('00')) {
+      phone = phone.substring(2);
+    } else if (!trimmedPhone.startsWith('+')) {
+      if (phone.startsWith('0')) phone = phone.substring(1);
+      if (!phone.startsWith('20')) phone = '20$phone';
+    }
+
+    if (phone.isEmpty) {
+      _showContactMessage(context, 'رقم هاتف العميل غير متوفر');
+      return;
+    }
+
+    final uri = Uri.https('wa.me', '/$phone');
+    try {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!context.mounted) return;
+      if (!launched) {
+        _showContactMessage(context, 'تعذر فتح واتساب');
+      }
+    } on PlatformException {
+      if (context.mounted) {
+        _showContactMessage(context, 'تعذر فتح واتساب');
+      }
+    }
+  }
+
+  void _showContactMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -565,20 +689,22 @@ class BookingDetailsView extends StatelessWidget {
           const SizedBox(height: 10),
 
           // Add payment button
-          AppPrimaryButton(
-            text: 'تسجيل دفعة جديدة',
-            icon: const Icon(LucideIcons.plus, size: 18, color: AppColors.white),
-            onPressed: () {
-              AddPaymentBottomSheet.show(
-                context: context,
-                bookingId: booking.id,
-                remainingAmount: booking.remainingAmount,
-                onPaymentSuccess: () {
-                  context.read<BookingDetailsCubit>().loadBooking(booking.id);
-                },
-              );
-            },
-          ),
+          if (PermissionGuard.canManageBookings)
+            AppPrimaryButton(
+              text: 'تسجيل دفعة جديدة',
+              icon: const Icon(LucideIcons.plus,
+                  size: 18, color: AppColors.white),
+              onPressed: () {
+                AddPaymentBottomSheet.show(
+                  context: context,
+                  bookingId: booking.id,
+                  remainingAmount: booking.remainingAmount,
+                  onPaymentSuccess: () {
+                    context.read<BookingDetailsCubit>().loadBooking(booking.id);
+                  },
+                );
+              },
+            ),
         ],
       ),
     );
@@ -625,7 +751,13 @@ class BookingDetailsView extends StatelessWidget {
                       ),
                       StatusChip.fromStatus(
                         service.status,
-                        onTap: () => _showServiceOptionsSheet(context, booking, service),
+                        onTap: PermissionGuard.canManageBookings
+                            ? () => _showServiceOptionsSheet(
+                                  context,
+                                  booking,
+                                  service,
+                                )
+                            : null,
                       ),
                     ],
                   ),
@@ -639,11 +771,13 @@ class BookingDetailsView extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Add custom service dashed button
-          AppDashedButton(
-            text: 'إضافة خدمة مخصصة',
-            icon: const Icon(LucideIcons.plus, size: 16, color: AppColors.primary),
-            onPressed: () => _showAddCustomServiceDialog(context, booking),
-          ),
+          if (PermissionGuard.canManageBookings)
+            AppDashedButton(
+              text: 'إضافة خدمة مخصصة',
+              icon: const Icon(LucideIcons.plus,
+                  size: 16, color: AppColors.primary),
+              onPressed: () => _showAddCustomServiceDialog(context, booking),
+            ),
         ],
       ),
     );
@@ -698,7 +832,8 @@ class BookingDetailsView extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  booking.internalNotes ?? 'ملاحظة داخلية سرية خاصة بإدارة القاعة.',
+                  booking.internalNotes ??
+                      'ملاحظة داخلية سرية خاصة بإدارة القاعة.',
                   style: const TextStyle(
                     fontFamily: AppTextStyles.fontFamily,
                     fontSize: 12,
@@ -787,6 +922,34 @@ class BookingDetailsView extends StatelessWidget {
   }
 
   Widget _buildFixedBottomBar(BuildContext context, Booking booking) {
+    if (booking.status == BookingLifecycleStatus.cancelled) {
+      return Container(
+        color: AppColors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: AppSecondaryButton(
+          text: 'العودة إلى الحجوزات',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop(true);
+            } else {
+              context.go('/bookings');
+            }
+          },
+        ),
+      );
+    }
+
+    if (!PermissionGuard.canManageBookings) {
+      return Container(
+        color: AppColors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: AppSecondaryButton(
+          text: 'مشاركة الإيصال',
+          onPressed: () => _showReceiptSheet(context, booking),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -836,7 +999,8 @@ class BookingDetailsView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            title: const Text('محجوزة (تضاف للمستحقات)', style: AppTextStyles.body),
+            title: const Text('محجوزة (تضاف للمستحقات)',
+                style: AppTextStyles.body),
             trailing: service.status == BookingServiceStatus.booked
                 ? const Icon(LucideIcons.check, color: AppColors.green)
                 : null,
@@ -909,7 +1073,8 @@ class BookingDetailsView extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('إلغاء', style: TextStyle(color: AppColors.muted)),
+            child:
+                const Text('إلغاء', style: TextStyle(color: AppColors.muted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -931,7 +1096,8 @@ class BookingDetailsView extends StatelessWidget {
                     );
                 Navigator.of(ctx).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('تمت إضافة الخدمة وزيادة إجمالي المستحق')),
+                  const SnackBar(
+                      content: Text('تمت إضافة الخدمة وزيادة إجمالي المستحق')),
                 );
               }
             },
@@ -1000,21 +1166,36 @@ class BookingDetailsView extends StatelessWidget {
                   style: AppTextStyles.cardTitle,
                 ),
                 const SizedBox(height: 4),
-                Text('إيصال سداد رقم #${booking.id.toArabicDigits()}', style: AppTextStyles.muted),
+                Text('إيصال سداد رقم #${booking.id.toArabicDigits()}',
+                    style: AppTextStyles.muted),
                 const Divider(height: 20, color: AppColors.line),
                 KeyValueRow(label: 'اسم العميل', value: booking.customerName),
                 KeyValueRow(label: 'المناسبة', value: booking.eventType),
-                KeyValueRow(label: 'تاريخ الفعالية', value: AppFormatters.formatDayMonth(booking.eventDate)),
-                KeyValueRow(label: 'إجمالي العقد', value: AppFormatters.formatMoney(booking.totalAmount)),
-                KeyValueRow(label: 'إجمالي المسدد', value: AppFormatters.formatMoney(booking.paidAmount), valueStyle: const TextStyle(color: AppColors.green, fontWeight: FontWeight.bold)),
-                KeyValueRow(label: 'المتبقي', value: AppFormatters.formatMoney(booking.remainingAmount), valueStyle: const TextStyle(color: AppColors.amberText, fontWeight: FontWeight.bold)),
+                KeyValueRow(
+                    label: 'تاريخ الفعالية',
+                    value: AppFormatters.formatDayMonth(booking.eventDate)),
+                KeyValueRow(
+                    label: 'إجمالي العقد',
+                    value: AppFormatters.formatMoney(booking.totalAmount)),
+                KeyValueRow(
+                    label: 'إجمالي المسدد',
+                    value: AppFormatters.formatMoney(booking.paidAmount),
+                    valueStyle: const TextStyle(
+                        color: AppColors.green, fontWeight: FontWeight.bold)),
+                KeyValueRow(
+                    label: 'المتبقي',
+                    value: AppFormatters.formatMoney(booking.remainingAmount),
+                    valueStyle: const TextStyle(
+                        color: AppColors.amberText,
+                        fontWeight: FontWeight.bold)),
               ],
             ),
           ),
           const SizedBox(height: 16),
           AppPrimaryButton(
             text: 'مشاركة عبر واتساب أو تطبيقات أخرى',
-            icon: const Icon(LucideIcons.share2, size: 18, color: AppColors.white),
+            icon: const Icon(LucideIcons.share2,
+                size: 18, color: AppColors.white),
             onPressed: () {
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1043,64 +1224,221 @@ class BookingDetailsView extends StatelessWidget {
 
   void _showCancelDialog(BuildContext context, Booking booking) {
     final reasonController = TextEditingController();
-    String refundDecision = 'احتجاز العربون بالكامل';
+    final refundAmountController =
+        TextEditingController(text: booking.paidAmount.toString());
+    final refundNotesController = TextEditingController();
+    var refund = false;
+    var refundMethod = 'cash';
+    var isSubmitting = false;
+    String? validationMessage;
 
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: AppColors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('إلغاء الحجز', style: TextStyle(color: AppColors.red, fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w700)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('سبب الإلغاء إلزامي، ولن يُحذف الحجز نهائياً بل يُسجل في الملغاة.', style: AppTextStyles.body),
-              const SizedBox(height: 10),
-              AppTextField(
-                label: 'سبب الإلغاء',
-                hint: 'مثال: اعتذار العميل لظروف عائلية',
-                controller: reasonController,
-              ),
-              const SizedBox(height: 10),
-              const Text('قرار العربون المسدد:', style: TextStyle(fontSize: 12, color: AppColors.muted)),
-              DropdownButton<String>(
-                value: refundDecision,
-                isExpanded: true,
-                items: const [
-                  DropdownMenuItem(value: 'احتجاز العربون بالكامل', child: Text('احتجاز العربون بالكامل')),
-                  DropdownMenuItem(value: 'استرداد العربون للعميل', child: Text('استرداد العربون للعميل')),
-                  DropdownMenuItem(value: 'استرداد جزئي (٥٠٪)', child: Text('استرداد جزئي (٥٠٪)')),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('إلغاء الحجز',
+              style: TextStyle(
+                  color: AppColors.red,
+                  fontFamily: AppTextStyles.fontFamily,
+                  fontWeight: FontWeight.w700)),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.65,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'سبب الإلغاء إلزامي. ستُسجل العملية في الحجز والحسابات.',
+                    style: AppTextStyles.body,
+                  ),
+                  const SizedBox(height: 10),
+                  AppTextField(
+                    label: 'سبب الإلغاء',
+                    hint: 'مثال: اعتذار العميل لظروف عائلية',
+                    controller: reasonController,
+                  ),
+                  if (booking.paidAmount > 0) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'إجمالي المبالغ المسددة: ${AppFormatters.formatMoney(booking.paidAmount)}',
+                      style: AppTextStyles.body,
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('إرجاع مبلغ للعميل'),
+                      value: refund,
+                      onChanged: isSubmitting
+                          ? null
+                          : (value) => setDialogState(() {
+                                refund = value;
+                                validationMessage = null;
+                              }),
+                    ),
+                    if (refund) ...[
+                      AppTextField(
+                        label:
+                            'المبلغ المسترد (بحد أقصى ${booking.paidAmount})',
+                        controller: refundAmountController,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButton<String>(
+                        value: refundMethod,
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'cash',
+                            child: Text('نقداً'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'bank_transfer',
+                            child: Text('تحويل بنكي'),
+                          ),
+                        ],
+                        onChanged: isSubmitting
+                            ? null
+                            : (value) {
+                                if (value != null) {
+                                  setDialogState(() => refundMethod = value);
+                                }
+                              },
+                      ),
+                      AppTextField(
+                        label: 'ملاحظات الاسترداد (اختياري)',
+                        controller: refundNotesController,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'سيُسجل المبلغ المسترد كمصروف مرتبط بالحجز.',
+                        style: AppTextStyles.muted,
+                      ),
+                    ] else
+                      const Text(
+                        'سيتم الاحتفاظ بكامل المبلغ المسدد كرسوم إلغاء.',
+                        style: AppTextStyles.muted,
+                      ),
+                  ] else
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text(
+                        'لا توجد مبالغ مسددة؛ سيتم إلغاء الحجز مباشرة.',
+                        style: AppTextStyles.muted,
+                      ),
+                    ),
+                  if (validationMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      validationMessage!,
+                      style: const TextStyle(
+                        color: AppColors.red,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ],
-                onChanged: (val) {
-                  if (val != null) setDialogState(() => refundDecision = val);
-                },
               ),
-            ],
+            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('رجوع', style: TextStyle(color: AppColors.muted)),
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+              child:
+                  const Text('رجوع', style: TextStyle(color: AppColors.muted)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.red, foregroundColor: AppColors.white),
-              onPressed: () {
-                final reason = reasonController.text.trim();
-                if (reason.isNotEmpty) {
-                  context.read<BookingDetailsCubit>().cancelBooking(reason, refundDecision);
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('تم إلغاء الحجز وتسجيل العملية بسجل النشاط')),
-                  );
-                }
-              },
-              child: const Text('تأكيد الإلغاء'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.red,
+                  foregroundColor: AppColors.white),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final reason = reasonController.text.trim();
+                      final amount =
+                          int.tryParse(refundAmountController.text.trim()) ?? 0;
+                      if (reason.isEmpty) {
+                        setDialogState(() {
+                          validationMessage = 'يرجى كتابة سبب الإلغاء.';
+                        });
+                        return;
+                      }
+                      if (refund &&
+                          (amount <= 0 || amount > booking.paidAmount)) {
+                        setDialogState(() {
+                          validationMessage =
+                              'أدخل مبلغاً أكبر من صفر ولا يتجاوز المبلغ المسدد.';
+                        });
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isSubmitting = true;
+                        validationMessage = null;
+                      });
+                      try {
+                        final result = await context
+                            .read<BookingDetailsCubit>()
+                            .cancelBooking(
+                              reason: reason,
+                              refund: refund,
+                              refundAmount: refund ? amount : 0,
+                              refundMethod: refundMethod,
+                              refundNotes:
+                                  refundNotesController.text.trim().isEmpty
+                                      ? null
+                                      : refundNotesController.text.trim(),
+                            );
+                        if (result == null) {
+                          throw StateError('تعذر تحميل بيانات الحجز لإلغائه.');
+                        }
+                        if (!ctx.mounted) return;
+                        Navigator.of(ctx).pop();
+                        final message = result.refundAmount > 0
+                            ? 'تم الإلغاء ورد ${AppFormatters.formatMoney(result.refundAmount)} والاحتفاظ بـ ${AppFormatters.formatMoney(result.retainedAmount)}'
+                            : result.totalPaid > 0
+                                ? 'تم الإلغاء والاحتفاظ بـ ${AppFormatters.formatMoney(result.retainedAmount)}'
+                                : 'تم إلغاء الحجز بنجاح';
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(message)),
+                          );
+                        }
+                      } catch (error) {
+                        if (!ctx.mounted) return;
+                        setDialogState(() {
+                          isSubmitting = false;
+                          validationMessage = error is ApiException
+                              ? error.message
+                              : error.toString();
+                        });
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.white,
+                      ),
+                    )
+                  : const Text(
+                      'تأكيد الإلغاء',
+                      style: TextStyle(color: AppColors.white),
+                    ),
             ),
           ],
         ),
       ),
-    );
+    ).whenComplete(() {
+      reasonController.dispose();
+      refundAmountController.dispose();
+      refundNotesController.dispose();
+    });
   }
 }

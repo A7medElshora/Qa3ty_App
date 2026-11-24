@@ -1,8 +1,139 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
 import 'app_buttons.dart';
+
+class AppSkeletonizer extends StatelessWidget {
+  final Widget child;
+
+  const AppSkeletonizer({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Skeletonizer(
+      effect: const ShimmerEffect(
+        baseColor: Color(0xFFE5E6EC),
+        highlightColor: Color(0xFFFDFCF9),
+        duration: Duration(milliseconds: 1400),
+      ),
+      containersColor: AppColors.greyBg,
+      enableSwitchAnimation: true,
+      child: child,
+    );
+  }
+}
+
+class AppListSkeleton extends StatelessWidget {
+  final int itemCount;
+  final EdgeInsetsGeometry padding;
+
+  const AppListSkeleton({
+    super.key,
+    this.itemCount = 4,
+    this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 80),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeletonizer(
+      child: ListView.separated(
+        padding: padding,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: itemCount,
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
+        itemBuilder: (context, index) => Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: AppColors.cardShadow,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: AppColors.greyBg,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('عنوان العنصر'),
+                    SizedBox(height: 8),
+                    Text('تفاصيل العنصر وبياناته الإضافية'),
+                    SizedBox(height: 6),
+                    Text('معلومات مرتبطة بتاريخ التسجيل'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('١٢٬٣٤٥ ج.م'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppSkeletonPanel extends StatelessWidget {
+  final double height;
+  final int lineCount;
+
+  const AppSkeletonPanel({
+    super.key,
+    required this.height,
+    this.lineCount = 2,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          Container(
+            width: 136,
+            height: 12,
+            decoration: BoxDecoration(
+              color: AppColors.greyBg,
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          for (var index = 0; index < lineCount; index++) ...[
+            FractionallySizedBox(
+              widthFactor: index.isEven ? 0.88 : 0.68,
+              child: Container(
+                height: 10,
+                decoration: BoxDecoration(
+                  color: AppColors.greyBg,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class SkeletonLoader extends StatefulWidget {
   final double width;

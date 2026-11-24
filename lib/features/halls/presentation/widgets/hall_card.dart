@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
 import 'package:qa3ty_app/core/utils/widgets/chips.dart';
 import 'package:qa3ty_app/core/utils/widgets/day_circle.dart';
 import '../../data/models/hall_model.dart';
+import '../cubits/halls_cubit.dart';
 
 class HallCard extends StatelessWidget {
   final Hall hall;
@@ -95,15 +98,16 @@ class HallCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'متبقي ${AppFormatters.formatMoney(hall.weekRemainingAmount)}',
-                      style: const TextStyle(
-                        fontFamily: AppTextStyles.fontFamily,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.amber,
+                    if (PermissionGuard.canViewReports)
+                      Text(
+                        'مستحق ${AppFormatters.formatMoney(hall.upcomingRemainingAmount)}',
+                        style: const TextStyle(
+                          fontFamily: AppTextStyles.fontFamily,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.amber,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -132,11 +136,17 @@ class HallCard extends StatelessWidget {
           dayNumber: day.dayNumber,
           status: day.status,
           size: 34,
-          onTap: () {
+          onTap: () async {
             if (day.bookingId != null) {
-              context.push('/bookings/${day.bookingId}');
-            } else if (day.status == DayStatus.available) {
-              context.push('/bookings/new?hallId=${hall.id}&day=${day.dayNumber}');
+              final wasCancelled =
+                  await context.push<bool>('/bookings/${day.bookingId}');
+              if (wasCancelled == true && context.mounted) {
+                await context.read<HallsCubit>().loadHalls();
+              }
+            } else if (PermissionGuard.canManageBookings &&
+                day.status == DayStatus.available) {
+              context
+                  .push('/bookings/new?hallId=${hall.id}&day=${day.dayNumber}');
             }
           },
         ),

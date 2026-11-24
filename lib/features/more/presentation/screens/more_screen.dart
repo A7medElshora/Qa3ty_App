@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_header.dart';
@@ -10,7 +11,7 @@ class MoreScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
+    final items = <_MoreMenuItem>[
       _MoreMenuItem(
         icon: LucideIcons.building2,
         title: 'القاعات والإدارة',
@@ -28,24 +29,28 @@ class MoreScreen extends StatelessWidget {
         title: 'المصروفات والتكاليف',
         subtitle: 'تسجيل الفواتير والصيانة والمصروفات العامة',
         route: '/expenses',
+        visible: PermissionGuard.canManageExpenses,
       ),
       _MoreMenuItem(
         icon: LucideIcons.boxes,
         title: 'المخزون والمستلزمات',
         subtitle: 'أرصدة الأصناف وحركات الشراء والاستهلاك',
         route: '/inventory',
+        visible: PermissionGuard.canManageInventory,
       ),
       _MoreMenuItem(
         icon: LucideIcons.users2,
         title: 'شؤون العمال والموظفين',
         subtitle: 'الأجور اليومية والشهرية وسجل الدفعات',
         route: '/workers',
+        visible: PermissionGuard.canManageWorkers,
       ),
       _MoreMenuItem(
         icon: LucideIcons.barChart3,
         title: 'التقارير المالية والأرباح',
         subtitle: 'تحليل الإيرادات وصافي الأرباح ومقارنة القاعات',
         route: '/reports',
+        visible: PermissionGuard.canViewReports,
       ),
       _MoreMenuItem(
         icon: LucideIcons.bell,
@@ -59,7 +64,7 @@ class MoreScreen extends StatelessWidget {
         subtitle: 'بيانات المنشأة وتفاصيل الباقة والحساب',
         route: '/settings',
       ),
-    ];
+    ].where((item) => item.visible).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -122,11 +127,13 @@ class _MoreMenuItem {
   final String title;
   final String subtitle;
   final String route;
+  final bool visible;
 
   _MoreMenuItem({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.route,
+    this.visible = true,
   });
 }
