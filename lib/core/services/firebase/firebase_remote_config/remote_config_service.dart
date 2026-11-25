@@ -1,91 +1,149 @@
 import 'dart:io';
+
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:qa3ty_app/core/config/env.dart';
 
-/// [FRConfig] is stands for Firebase Remote Config
+/// [FRConfig] is stands for Firebase Remote Config.
 class FRConfig {
   static final FRConfig instance = FRConfig._();
+
   final FirebaseRemoteConfig _remoteConfig = FirebaseRemoteConfig.instance;
+  Future<void>? _configuration;
+  Future<void>? _fetchInProgress;
+  DateTime? _lastFetchAttempt;
 
-  FRConfig._() {
-    setupRemoteConfig();
-    _isUpdateExist();
-  }
+  FRConfig._();
 
-  /// Check Remote Config if the ['force_update'] is true, the app will navigate
-  /// to force updating page, if not the app will behave normally.
-  bool? get _isForceUpdate {
-    // if (kDebugMode) return false;
-    if (Platform.isIOS) {
-      return _remoteConfig.getBool('force_update_ios');
-    } else {
-      return _remoteConfig.getBool('force_update');
-    }
-  }
+  bool get _isIos => Platform.isIOS;
 
   String get contactUsLink {
-    if (Platform.isIOS) {
-      return _remoteConfig.getString('contact_us_link_ios');
-    } else {
-      return _remoteConfig.getString('contact_us_link');
+    return _remoteConfig
+        .getString(_isIos ? 'contact_us_link_ios' : 'contact_us_link');
+  }
+
+  String get storeAppLink => _remoteConfig.getString('update_link');
+
+  String get latestVersionName =>
+      _remoteConfig.getString('latest_version_name');
+
+  bool get isAppUnderMaintenance =>
+      _remoteConfig.getBool('is_under_maintenance');
+
+  static bool isBuildUpdateRequired({
+    required int currentBuildNumber,
+    required int forceUpdateBuild,
+  }) {
+    return forceUpdateBuild > 0 && currentBuildNumber < forceUpdateBuild;
+  }
+
+  Future<void> refreshRemoteConfig({bool forceFetch = false}) async {
+    await _ensureConfigured();
+
+    final minimumFetchInterval = AppConfig.current.isDevelopment
+        ? Duration.zero
+        : const Duration(hours: 1);
+    final inProgress = _fetchInProgress;
+    if (inProgress != null) {
+      await inProgress;
+      return;
+    }
+
+    final now = DateTime.now();
+    final lastAttempt = _lastFetchAttempt;
+    if (!forceFetch &&
+        !AppConfig.current.isDevelopment &&
+        lastAttempt != null &&
+        now.difference(lastAttempt) < minimumFetchInterval) {
+      return;
+    }
+
+    _lastFetchAttempt = now;
+    final fetch = _fetchAndActivate();
+    _fetchInProgress = fetch;
+    try {
+      await fetch;
+    } finally {
+      if (identical(_fetchInProgress, fetch)) _fetchInProgress = null;
     }
   }
 
-  String get storeAppLink {
-    if (Platform.isIOS) {
-      return _remoteConfig.getString('app_link_ios');
-    } else {
-      return _remoteConfig.getString('app_link');
+  Future<void> _fetchAndActivate() async {
+    try {
+      final activated = await _remoteConfig.fetchAndActivate().timeout(
+            const Duration(seconds: 10),
+          );
+      debugPrint(
+        'Remote Config fetch completed: activated=$activated, '
+        'force_update_build=${_remoteConfig.getInt('force_update_build')}, '
+        'update_link_configured=${_remoteConfig.getString('update_link').isNotEmpty}',
+      );
+    } on Exception catch (error) {
+      debugPrint('Remote Config fetch failed; using cached values: $error');
     }
-  }
-
-  /// Setup FCR configurations.
-
-  Future<String> _getAppInfo() async {
-    final PackageInfo packageInfo = await PackageInfo.fromPlatform();
-    return packageInfo.buildNumber;
-  }
-
-  Future<bool> _isUpdateExist() async {
-    final String getAppInfo = await _getAppInfo();
-    final int? buildNumber = int.tryParse(getAppInfo);
-    final int configBuildNumber = Platform.isIOS
-        ? _remoteConfig.getInt('build_number_ios')
-        : _remoteConfig.getInt('build_number');
-    debugPrint(
-        'build number: $buildNumber, config build number: $configBuildNumber');
-    return configBuildNumber > buildNumber! ? true : false;
-  }
-
-  bool get isAppUnderMaintenance {
-    // if (kDebugMode) return false;
-    return _remoteConfig.getBool('is_under_maintenance');
   }
 
   Future<bool> isNeedForceUpdate() async {
-    final bool isUpdateExist = await _isUpdateExist();
-    debugPrint('isUpdateExist: $isUpdateExist');
-    return _isForceUpdate! && isUpdateExist ? true : false;
+    await _ensureConfigured();
+
+    final int? currentBuildNumber;
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      currentBuildNumber = int.tryParse(packageInfo.buildNumber);
+    } on Exception catch (error) {
+      debugPrint('Could not read the current build number: $error');
+      return false;
+    }
+    if (currentBuildNumber == null) return false;
+
+    final forceUpdateBuild = _remoteConfig.getInt('force_update_build');
+    debugPrint(
+      'Force update check: current build=$currentBuildNumber, '
+      'force_update_build=$forceUpdateBuild',
+    );
+    return isBuildUpdateRequired(
+      currentBuildNumber: currentBuildNumber,
+      forceUpdateBuild: forceUpdateBuild,
+    );
   }
 
-  Future<FirebaseRemoteConfig> setupRemoteConfig() async {
+  Future<void> _ensureConfigured() async {
+    final existingConfiguration = _configuration;
+    if (existingConfiguration != null) {
+      await existingConfiguration;
+      return;
+    }
+
+    final configuration = _configure();
+    _configuration = configuration;
+    try {
+      await configuration;
+    } on Exception catch (error) {
+      _configuration = null;
+      debugPrint('Remote Config setup failed; using cached values: $error');
+    }
+  }
+
+  Future<void> _configure() async {
+    final minimumFetchInterval = AppConfig.current.isDevelopment
+        ? Duration.zero
+        : const Duration(hours: 1);
+
     await _remoteConfig.setConfigSettings(
       RemoteConfigSettings(
         fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval: Duration.zero,
+        minimumFetchInterval: minimumFetchInterval,
       ),
     );
-
+    await _remoteConfig.setDefaults({
+      'force_update_build': 0,
+      'update_link': '',
+      'latest_version_name': '',
+      'is_under_maintenance': false,
+    });
     await _remoteConfig.activate();
-    await Future.delayed(const Duration(seconds: 1));
-    await _remoteConfig.fetchAndActivate();
-    return _remoteConfig;
   }
 
-
-  String appLink(){
-    debugPrint('appLinkkkkkkkkkkkkkkkkkkkkk : $storeAppLink');
-    return storeAppLink;
-  }
+  String appLink() => storeAppLink;
 }

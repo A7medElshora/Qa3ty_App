@@ -6,6 +6,8 @@ import 'package:qa3ty_app/core/utils/constant/app_style.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_buttons.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_header.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
+import 'package:qa3ty_app/features/bookings/data/models/booking_model.dart';
+import 'package:qa3ty_app/features/customers/data/models/customer_model.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final String phone;
@@ -20,6 +22,7 @@ class IncomingCallScreen extends StatefulWidget {
 }
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
+  Customer? _matchedCustomer;
   String? _error;
   bool _isLoading = true;
 
@@ -52,10 +55,27 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         return;
       }
 
-      context.go(
-        '/customer-profile/${Uri.encodeComponent(customer.id)}',
-        extra: customer,
-      );
+      _matchedCustomer = customer;
+      final bookings = await ServicesLocator.bookingsRepo.getBookings();
+      if (!mounted) return;
+
+      final today = DateTime.now();
+      final todayDate = DateTime(today.year, today.month, today.day);
+      final upcomingBookings = bookings
+          .where(
+            (booking) =>
+                booking.customerId == customer.id &&
+                booking.status != BookingLifecycleStatus.cancelled &&
+                !booking.eventDate.isBefore(todayDate),
+          )
+          .toList()
+        ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
+
+      if (upcomingBookings.isNotEmpty) {
+        context.go('/bookings/${upcomingBookings.first.id}');
+      } else {
+        _openCustomerProfile(customer);
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -75,6 +95,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       },
     );
     context.go(uri.toString());
+  }
+
+  void _openCustomerProfile(Customer customer) {
+    context.go(
+      '/customer-profile/${Uri.encodeComponent(customer.id)}',
+      extra: customer,
+    );
   }
 
   @override
@@ -113,8 +140,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                             ),
                             const SizedBox(height: 8),
                             AppSecondaryButton(
-                              text: 'فتح حجز جديد',
-                              onPressed: _openNewBooking,
+                              text: _matchedCustomer == null
+                                  ? 'فتح حجز جديد'
+                                  : 'فتح ملف العميل',
+                              onPressed: _matchedCustomer == null
+                                  ? _openNewBooking
+                                  : () =>
+                                      _openCustomerProfile(_matchedCustomer!),
                             ),
                           ],
                         ),

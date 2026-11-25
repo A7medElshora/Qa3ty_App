@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:qa3ty_app/core/helpers/permission_guard.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
 import 'package:qa3ty_app/core/utils/constant/app_style.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
@@ -61,6 +60,11 @@ class _HallsHomeView extends StatelessWidget {
               }
 
               final halls = (state is HallsLoaded) ? state.halls : [];
+              final upcomingEventsCount = halls.fold<int>(
+                0,
+                (int total, hall) =>
+                    (total + hall.upcomingWeekEventsCount).toInt(),
+              );
 
               // ── When halls exist: scrollable list ─────────────────────────────
               if (halls.isNotEmpty) {
@@ -72,15 +76,12 @@ class _HallsHomeView extends StatelessWidget {
                     children: [
                       _buildHeader(context),
                       const SizedBox(height: 14),
-                      if (PermissionGuard.canViewReports) ...[
-                        AlertStrip(
-                          text: '٢ فعاليات خلال ٧ أيام عليها مبالغ متبقية',
-                          actionText: 'عرض',
-                          onActionTap: () =>
-                              context.push('/bookings?filter=due'),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
+                      AlertStrip(
+                        text: 'فعاليات قادمة خلال ٧ أيام: $upcomingEventsCount',
+                        actionText: 'التقويم',
+                        onActionTap: () => context.push('/calendar'),
+                      ),
+                      const SizedBox(height: 14),
                       ...halls.map(
                         (hall) => Padding(
                           padding: const EdgeInsets.only(bottom: 14),

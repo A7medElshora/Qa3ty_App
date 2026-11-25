@@ -7,8 +7,9 @@ class IntroAppInitial extends IntroAppState {}
 
 class ForceUpdate extends IntroAppState {
   final String appLink;
+  final String latestVersionName;
 
-  ForceUpdate({required this.appLink});
+  ForceUpdate({required this.appLink, this.latestVersionName = ''});
 }
 
 class NoRestriction extends IntroAppState {}

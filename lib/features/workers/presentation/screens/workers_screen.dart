@@ -90,96 +90,110 @@ class _WorkersScreenState extends State<WorkersScreen> {
   Widget _buildWorkerCard(Worker worker) {
     final isDaily = worker.wageType == WageType.daily;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: AppColors.cardShadow,
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(worker.name, style: AppTextStyles.cardTitle),
-                  const SizedBox(height: 2),
-                  Text('${worker.role} · ${worker.phone}',
-                      style: AppTextStyles.muted),
-                ],
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(10),
+    return GestureDetector(
+      onTap: () => _showWorkerTransactions(worker),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: AppColors.cardShadow,
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(worker.name, style: AppTextStyles.cardTitle),
+                    const SizedBox(height: 2),
+                    Text('${worker.role} · ${worker.phone}',
+                        style: AppTextStyles.muted),
+                  ],
                 ),
-                child: Text(
-                  isDaily
-                      ? 'أجر يومي: ${AppFormatters.formatMoney(worker.wageRate)}'
-                      : 'راتب شهري: ${AppFormatters.formatMoney(worker.wageRate)}',
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    isDaily
+                        ? 'أجر يومي: ${AppFormatters.formatMoney(worker.wageRate)}'
+                        : 'راتب شهري: ${AppFormatters.formatMoney(worker.wageRate)}',
+                    style: const TextStyle(
+                        fontFamily: AppTextStyles.fontFamily,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(color: AppColors.line, height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('أيام الحضور: ${worker.daysWorked.toArabicDigits()} يوم',
+                    style: AppTextStyles.body),
+                Text(
+                  'المستحق: ${AppFormatters.formatMoney(worker.currentBalance)}',
                   style: const TextStyle(
                       fontFamily: AppTextStyles.fontFamily,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.amberText),
                 ),
-              ),
-            ],
-          ),
-          const Divider(color: AppColors.line, height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('أيام الحضور: ${worker.daysWorked.toArabicDigits()} يوم',
-                  style: AppTextStyles.body),
-              Text(
-                'المستحق: ${AppFormatters.formatMoney(worker.currentBalance)}',
-                style: const TextStyle(
-                    fontFamily: AppTextStyles.fontFamily,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.amberText),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'إجمالي الرواتب المصروفة: ${AppFormatters.formatMoney(worker.totalPaid)}',
-            style: const TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.green,
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: AppPrimaryButton(
-                  text: 'صرف دفعة',
-                  height: 36,
-                  onPressed: () => _showPayoutDialog(worker),
-                ),
+            const SizedBox(height: 6),
+            Text(
+              'إجمالي الرواتب المصروفة: ${AppFormatters.formatMoney(worker.totalPaid)}',
+              style: const TextStyle(
+                fontFamily: AppTextStyles.fontFamily,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.green,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppSecondaryButton(
-                  text: 'مكافأة / خصم',
-                  height: 36,
-                  onPressed: () => _showBonusDeductionDialog(worker),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: AppPrimaryButton(
+                    text: 'صرف دفعة',
+                    height: 36,
+                    onPressed: () => _showPayoutDialog(worker),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: AppSecondaryButton(
+                    text: 'مكافأة / خصم',
+                    height: 36,
+                    onPressed: () => _showBonusDeductionDialog(worker),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showWorkerTransactions(Worker worker) {
+    AppBottomSheet.show<void>(
+      context: context,
+      title: 'المكافآت والخصومات · ${worker.name}',
+      child: _WorkerTransactionsSheet(
+        worker: worker,
+        repository: ServicesLocator.workersRepo,
       ),
     );
   }
@@ -257,6 +271,7 @@ class _WorkersScreenState extends State<WorkersScreen> {
                   if (ctx.mounted) {
                     Navigator.pop(ctx);
                   }
+
                   _fetchWorkers();
                 }
               },
@@ -401,6 +416,124 @@ class _WorkersScreenState extends State<WorkersScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _WorkerTransactionsSheet extends StatefulWidget {
+  final Worker worker;
+  final WorkersRepository repository;
+
+  const _WorkerTransactionsSheet({
+    required this.worker,
+    required this.repository,
+  });
+
+  @override
+  State<_WorkerTransactionsSheet> createState() =>
+      _WorkerTransactionsSheetState();
+}
+
+class _WorkerTransactionsSheetState extends State<_WorkerTransactionsSheet> {
+  List<WorkerTransaction> _transactions = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final transactions =
+          await widget.repository.getTransactions(widget.worker.id);
+      if (!mounted) return;
+      setState(() {
+        _transactions = transactions;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_errorMessage != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_errorMessage!, style: const TextStyle(color: AppColors.red)),
+          TextButton(
+            onPressed: _loadTransactions,
+            child: const Text('إعادة المحاولة'),
+          ),
+        ],
+      );
+    }
+    if (_transactions.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Text('لا توجد مكافآت أو خصومات مسجلة لهذا العامل.'),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: _transactions.map((transaction) {
+        final isBonus = transaction.type == WorkerTransactionType.bonus;
+        final isDeduction = transaction.type == WorkerTransactionType.deduction;
+        final label = isBonus
+            ? 'مكافأة'
+            : isDeduction
+                ? 'خصم'
+                : 'دفعة راتب';
+        final color = isBonus
+            ? AppColors.green
+            : isDeduction
+                ? AppColors.red
+                : AppColors.primary;
+        final sign = isBonus
+            ? '+'
+            : isDeduction
+                ? '-'
+                : '';
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(label, style: AppTextStyles.cardTitle),
+          subtitle: Text(
+            [
+              AppFormatters.formatDayMonth(transaction.date),
+              if (transaction.note?.isNotEmpty == true) transaction.note!,
+            ].join(' · '),
+            style: AppTextStyles.muted,
+          ),
+          trailing: Text(
+            '$sign${AppFormatters.formatMoney(transaction.amount)}',
+            style: TextStyle(
+              color: color,
+              fontFamily: AppTextStyles.fontFamily,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

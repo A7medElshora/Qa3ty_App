@@ -81,6 +81,7 @@ class Worker {
 
 abstract class WorkersRepository {
   Future<List<Worker>> getWorkers();
+  Future<List<WorkerTransaction>> getTransactions(String workerId);
   Future<void> addWorker(Worker worker);
   Future<void> updateWorker(Worker worker);
   Future<void> recordTransaction(WorkerTransaction transaction);
@@ -140,6 +141,17 @@ class RemoteWorkersRepository implements WorkersRepository {
         note: (item['notes'] ?? item['note'])?.toString(),
       );
     }).toList();
+  }
+
+  @override
+  Future<List<WorkerTransaction>> getTransactions(String workerId) async {
+    try {
+      final transactions = await _getWorkerTransactions(workerId);
+      transactions.sort((a, b) => b.date.compareTo(a.date));
+      return transactions;
+    } on DioException catch (e) {
+      throw ApiException.fromDioError(e);
+    }
   }
 
   int _currentBalance({
@@ -325,6 +337,15 @@ class MockWorkersRepository implements WorkersRepository {
   Future<List<Worker>> getWorkers() async {
     await Future.delayed(const Duration(milliseconds: 50));
     return List.from(_workers);
+  }
+
+  @override
+  Future<List<WorkerTransaction>> getTransactions(String workerId) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    return _transactions
+        .where((transaction) => transaction.workerId == workerId)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
   }
 
   @override

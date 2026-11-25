@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:qa3ty_app/core/helpers/booking_id_registry.dart';
 import 'package:qa3ty_app/core/networking/api_constants.dart';
 import 'package:qa3ty_app/core/networking/api_exceptions.dart';
@@ -567,29 +568,45 @@ class RemoteBookingsRepository implements BookingsRepository {
           ]
         : const <String>[];
 
-    // Default mock services if not set
-    final services = _bookingServices[intId] ??
-        const [
-          ServiceItem(
-            id: 's1',
-            name: 'زفة',
-            price: 3000,
-            note: 'فرقة استعراضية',
-            status: BookingServiceStatus.booked,
-          ),
-          ServiceItem(
-            id: 's2',
-            name: 'دي جي',
-            price: 2500,
-            status: BookingServiceStatus.booked,
-          ),
-          ServiceItem(
-            id: 's3',
-            name: 'دبكة',
-            price: 2500,
-            status: BookingServiceStatus.booked,
-          ),
-        ];
+    final notes = json['notes']?.toString() ?? '';
+    const servicesMarker = '__QA3ATY_SERVICES__:';
+    List<ServiceItem>? persistedServices;
+    var visibleNotes = notes;
+    final markerIndex = notes.indexOf(servicesMarker);
+    if (markerIndex >= 0) {
+      final markerEnd = notes.indexOf('\n', markerIndex);
+      final encodedServices = notes
+          .substring(markerIndex + servicesMarker.length,
+              markerEnd < 0 ? null : markerEnd)
+          .trim();
+      try {
+        final decoded = jsonDecode(encodedServices);
+        if (decoded is List) {
+          persistedServices = decoded
+              .whereType<Map<String, dynamic>>()
+              .map(ServiceItem.fromJson)
+              .toList();
+        }
+      } on FormatException {
+        persistedServices = null;
+      }
+      visibleNotes = notes
+          .replaceRange(
+            markerIndex,
+            markerEnd < 0 ? notes.length : markerEnd + 1,
+            '',
+          )
+          .trim();
+    }
+    final services = _bookingServices[intId] ?? persistedServices ?? const [];
+    final hallPrice = ((json['hall_price'] as num?)?.round()) ??
+        (total -
+                services
+                    .where((service) =>
+                        service.status == BookingServiceStatus.booked)
+                    .fold(0, (sum, service) => sum + service.totalPrice))
+            .clamp(0, total)
+            .toInt();
 
     return Booking(
       id: intId,
@@ -604,9 +621,9 @@ class RemoteBookingsRepository implements BookingsRepository {
       eventDate: eventDate,
       timeRange: '$startTime – $endTime',
       seatsCount: 450,
-      hallPrice: total > 8000 ? total - 8000 : total,
+      hallPrice: hallPrice,
       dueDate: eventDate.subtract(const Duration(days: 10)),
-      eventNotes: json['notes']?.toString(),
+      eventNotes: visibleNotes.isEmpty ? null : visibleNotes,
       setupNotes: 'تجهيز الكوشة والإضاءة المبرمجة.',
       internalNotes: 'ملاحظات داخلية للموظفين.',
       activityLog: [
@@ -743,10 +760,13 @@ class RemoteBookingsRepository implements BookingsRepository {
           '${booking.eventDate.year}-${booking.eventDate.month.toString().padLeft(2, '0')}-${booking.eventDate.day.toString().padLeft(2, '0')}';
       final selectedServices = booking.services
           .where((service) => service.status == BookingServiceStatus.booked)
-          .map((service) => '${service.name}: ${service.price} ج.م')
+          .map((service) =>
+              '${service.name}: ${service.totalPrice} ج.م (${service.quantity} × ${service.price} ج.م للوحدة)')
           .join('، ');
       final notes = [
         if (selectedServices.isNotEmpty) 'الخدمات المختارة: $selectedServices',
+        if (booking.services.isNotEmpty)
+          '__QA3ATY_SERVICES__:${jsonEncode(booking.services.map((service) => service.toJson()).toList())}',
         if (booking.eventNotes?.isNotEmpty == true) booking.eventNotes!,
       ].join('\n');
       final response = await _dio.post(
@@ -763,7 +783,7 @@ class RemoteBookingsRepository implements BookingsRepository {
           'advance_payment': booking.paidAmount.toDouble(),
           'status': 'confirmed',
           'drinks_cake_responsibility': 'tenant',
-          'notes': notes.isEmpty ? null : notes,
+          'notes': notes,
         },
       );
       if (response.data is! Map<String, dynamic>) {

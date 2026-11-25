@@ -70,11 +70,15 @@ class AuthCubit extends Cubit<AuthState> {
         emit(AccountSuspendedState(message: e.message));
       } else if (e.code == 'subscription_expired') {
         emit(SubscriptionExpiredState(message: e.message));
-      } else {
+      } else if (e.code == 'unauthorized' ||
+          e.code == 'invalid_token' ||
+          e.code == 'token_expired') {
         emit(Unauthenticated(e.message));
+      } else {
+        emit(AuthErrorState(e.message));
       }
     } catch (e) {
-      emit(const Unauthenticated());
+      emit(AuthErrorState(e.toString()));
     }
   }
 
@@ -112,7 +116,8 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   void onSessionExpired() {
-    emit(const Unauthenticated('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.'));
+    emit(const Unauthenticated(
+        'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.'));
   }
 
   void onSubscriptionExpired(String message) {

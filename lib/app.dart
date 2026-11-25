@@ -6,7 +6,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:qa3ty_app/core/export.dart';
 import 'package:qa3ty_app/core/config/env.dart';
 import 'package:qa3ty_app/core/services/incoming_call_bridge.dart';
+import 'package:qa3ty_app/core/services/push_notifications_service.dart';
 import 'package:qa3ty_app/features/auth/export.dart';
+import 'package:qa3ty_app/features/notifications/data/models/notification_model.dart';
 import 'core/cubit/internet/internet_cubit.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = rootNavigatorKey;
@@ -25,25 +27,53 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   StreamSubscription<String>? _incomingCallSubscription;
+  StreamSubscription<String>? _localNotificationSubscription;
+  StreamSubscription<PushNotificationDetails>? _pushNotificationSubscription;
   StreamSubscription<dynamic>? _authSubscription;
   String? _pendingIncomingPhone;
+  PushNotificationDetails? _pendingPushNotification;
   bool _routerReady = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _incomingCallSubscription =
         IncomingCallBridge.instance.incomingCalls.listen(_queueIncomingCall);
+    _localNotificationSubscription =
+        IncomingCallBridge.instance.notificationTaps.listen(
+      PushNotificationsService.instance.handleLocalNotificationTap,
+    );
+    _pushNotificationSubscription = PushNotificationsService
+        .instance.openedNotifications
+        .listen(_queuePushNotification);
+    PushNotificationsService.instance.setAuthenticated(
+      ServicesLocator.authCubit.state is Authenticated,
+    );
     _authSubscription = ServicesLocator.authCubit.stream.listen((_) {
+      PushNotificationsService.instance.setAuthenticated(
+        ServicesLocator.authCubit.state is Authenticated,
+      );
       _openPendingIncomingCall();
+      _openPendingPushNotification();
     });
     _initializeIncomingCallBridge();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _routerReady = true;
+      _pendingPushNotification =
+          PushNotificationsService.instance.takePendingOpenedNotification();
       _openPendingIncomingCall();
+      _openPendingPushNotification();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ServicesLocator.introAppCubit.refreshRemoteConfig();
+    }
   }
 
   Future<void> _initializeIncomingCallBridge() async {
@@ -59,6 +89,33 @@ class _MyAppState extends State<MyApp> {
   void _queueIncomingCall(String phone) {
     _pendingIncomingPhone = phone;
     _openPendingIncomingCall();
+  }
+
+  void _queuePushNotification(PushNotificationDetails notification) {
+    _pendingPushNotification = notification;
+    _openPendingPushNotification();
+  }
+
+  void _openPendingPushNotification() {
+    final notification = _pendingPushNotification;
+    if (!_routerReady || notification == null) return;
+
+    final isMock = AppConfig.current.useMockData;
+    final isAuthenticated = ServicesLocator.authCubit.state is Authenticated;
+    if (!isMock && !isAuthenticated) return;
+
+    _pendingPushNotification = null;
+    AppRouter.router.push(
+      '/notification-details',
+      extra: AppNotification(
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        date: notification.date,
+        type: notificationTypeFrom(notification.type),
+        route: notification.route,
+      ),
+    );
   }
 
   void _openPendingIncomingCall() {
@@ -83,7 +140,10 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _incomingCallSubscription?.cancel();
+    _localNotificationSubscription?.cancel();
+    _pushNotificationSubscription?.cancel();
     _authSubscription?.cancel();
     super.dispose();
   }

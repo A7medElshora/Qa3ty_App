@@ -9,6 +9,19 @@ enum NotificationType {
   lowStock, // انخفاض مخزون
 }
 
+NotificationType notificationTypeFrom(String value) {
+  final type = value.toLowerCase();
+  if (type.contains('due') ||
+      type.contains('remaining') ||
+      type.contains('deposit') ||
+      type.contains('advance')) {
+    return NotificationType.remainingDue;
+  }
+  if (type.contains('payment')) return NotificationType.paymentReceived;
+  if (type.contains('stock')) return NotificationType.lowStock;
+  return NotificationType.upcomingEvent;
+}
+
 class AppNotification {
   final String id;
   final String title;
@@ -53,10 +66,13 @@ abstract class NotificationsRepository {
   Future<List<AppNotification>> getNotifications();
   Future<void> markAsRead(String id);
   Future<void> markAllAsRead();
+  Future<void> registerDeviceToken({required String fcmToken});
 }
 
 class RemoteNotificationsRepository implements NotificationsRepository {
-  final Dio _dio = DioFactory.getDio();
+  final Dio _dio;
+
+  RemoteNotificationsRepository([Dio? dio]) : _dio = dio ?? DioFactory.getDio();
 
   @override
   Future<List<AppNotification>> getNotifications() async {
@@ -67,16 +83,8 @@ class RemoteNotificationsRepository implements NotificationsRepository {
           ? (data['data'] is Map ? (data['data']['items'] ?? []) : data['data'])
           : (data is List ? data : []);
 
-      return rawItems.map<AppNotification>((item) {
-        NotificationType nType = NotificationType.upcomingEvent;
-        final typeStr = item['type']?.toString().toLowerCase() ?? '';
-        if (typeStr.contains('due') || typeStr.contains('remaining')) {
-          nType = NotificationType.remainingDue;
-        } else if (typeStr.contains('payment')) {
-          nType = NotificationType.paymentReceived;
-        } else if (typeStr.contains('stock')) {
-          nType = NotificationType.lowStock;
-        }
+      final notifications = rawItems.map<AppNotification>((item) {
+        final nType = notificationTypeFrom(item['type']?.toString() ?? '');
 
         DateTime d = DateTime.now();
         final rawDate = item['created_at'] ?? item['date'];
@@ -91,9 +99,13 @@ class RemoteNotificationsRepository implements NotificationsRepository {
           date: d,
           type: nType,
           isRead: item['is_read'] == true,
-          route: item['route']?.toString() ?? item['action_url']?.toString(),
+          route: _internalNotificationRoute(
+            item['route']?.toString() ?? item['action_url']?.toString(),
+          ),
         );
-      }).toList();
+      }).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      return notifications;
     } on DioException catch (e) {
       throw ApiException.fromDioError(e);
     }
@@ -117,19 +129,27 @@ class RemoteNotificationsRepository implements NotificationsRepository {
     }
   }
 
-  Future<void> registerDeviceToken({required String fcmToken, String? deviceLabel}) async {
+  @override
+  Future<void> registerDeviceToken({required String fcmToken}) async {
     try {
       await _dio.post(
         '/device-tokens',
         data: {
           'token': fcmToken,
-          'device_label': deviceLabel ?? 'Flutter Client',
+          'device_label': 'Qa3ty Flutter App',
         },
       );
     } on DioException catch (e) {
       throw ApiException.fromDioError(e);
     }
   }
+}
+
+String? _internalNotificationRoute(String? route) {
+  if (route == null || !route.startsWith('/') || route.startsWith('//')) {
+    return null;
+  }
+  return route;
 }
 
 class MockNotificationsRepository implements NotificationsRepository {
@@ -176,7 +196,8 @@ class MockNotificationsRepository implements NotificationsRepository {
   @override
   Future<List<AppNotification>> getNotifications() async {
     await Future.delayed(const Duration(milliseconds: 50));
-    return List.from(_notifications);
+    return List<AppNotification>.from(_notifications)
+      ..sort((a, b) => b.date.compareTo(a.date));
   }
 
   @override
@@ -195,4 +216,7 @@ class MockNotificationsRepository implements NotificationsRepository {
       _notifications[i] = _notifications[i].copyWith(isRead: true);
     }
   }
+
+  @override
+  Future<void> registerDeviceToken({required String fcmToken}) async {}
 }

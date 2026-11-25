@@ -1,67 +1,36 @@
 import 'package:qa3ty_app/core/services/firebase/firebase_remote_config/remote_config_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 part 'intro_app_state.dart';
 
 class IntroAppCubit extends Cubit<IntroAppState> {
   IntroAppCubit() : super(IntroAppInitial());
 
-  void initApp() async {
+  Future<void> initApp() => refreshRemoteConfig();
+
+  Future<void> refreshRemoteConfig({bool forceFetch = false}) async {
     try {
-      if (await _isForceUpdateActivated) return;
-
-      if (_isAppUnderMaintenance) return;
-    } on Exception catch (e) {
-      debugPrint('GUBA :: IntroAppCubit :: initApp :: $e');
-    }
-
-    emit(NoRestriction());
-  }
-
-  Future<bool> get _isForceUpdateActivated async {
-    try {
+      await FRConfig.instance.refreshRemoteConfig(forceFetch: forceFetch);
       final isUserForcedToUpdate = await FRConfig.instance.isNeedForceUpdate();
-      final appLink = FRConfig.instance.appLink();
-      debugPrint(
-          'GUBA :: IntroAppCubit :: isUserForcedToUpdate :: $isUserForcedToUpdate');
-
       if (isUserForcedToUpdate) {
-        emit(ForceUpdate(appLink: appLink));
-        return true;
+        emit(
+          ForceUpdate(
+            appLink: FRConfig.instance.appLink(),
+            latestVersionName: FRConfig.instance.latestVersionName,
+          ),
+        );
+        return;
       }
-      return false;
-    } catch (e) {
-      debugPrint('GUBA :: IntroAppCubit :: _isForceUpdateActivated :: $e');
-      return false;
-    }
-  }
 
-  bool get _isAppUnderMaintenance {
-    try {
-      final isAppUnderMaintenance = FRConfig.instance.isAppUnderMaintenance;
-      debugPrint(
-          'GUBA :: IntroAppCubit :: isAppUnderMaintenance :: $isAppUnderMaintenance');
-      if (isAppUnderMaintenance) {
+      if (FRConfig.instance.isAppUnderMaintenance) {
         emit(AppUnderMaintenance());
-        return true;
+      } else {
+        emit(NoRestriction());
       }
-      return false;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  void goToStore({required String appLink}) async {
-    final Uri url = Uri.parse(appLink);
-    try {
-      if (!await launchUrl(url)) {
-        throw Exception('Could not launch $url');
-      }
-    } catch (e) {
-      debugPrint('Could not launch erorr  $url');
+    } on Exception catch (error) {
+      debugPrint('Intro app Remote Config check failed: $error');
+      if (state is! ForceUpdate) emit(NoRestriction());
     }
   }
 }

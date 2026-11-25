@@ -7,6 +7,7 @@ class IncomingCallBridge {
   IncomingCallBridge._();
 
   static final IncomingCallBridge instance = IncomingCallBridge._();
+  static const pushNotificationPayloadPrefix = 'qa3ty-push:';
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -19,10 +20,21 @@ class IncomingCallBridge {
       scheduleMicrotask(() => _incomingCalls.add(phone));
     },
   );
+  late final StreamController<String> _notificationTaps =
+      StreamController<String>.broadcast(
+    onListen: () {
+      final payload = _pendingNotificationPayload;
+      if (payload == null) return;
+      _pendingNotificationPayload = null;
+      scheduleMicrotask(() => _notificationTaps.add(payload));
+    },
+  );
   bool _initialized = false;
   String? _pendingPhone;
+  String? _pendingNotificationPayload;
 
   Stream<String> get incomingCalls => _incomingCalls.stream;
+  Stream<String> get notificationTaps => _notificationTaps.stream;
 
   Future<void> initialize() async {
     if (_initialized || !Platform.isAndroid) return;
@@ -31,7 +43,7 @@ class IncomingCallBridge {
         android: AndroidInitializationSettings('ic_bg_service_small'),
       ),
       onDidReceiveNotificationResponse: (response) {
-        _publishIncomingCall(response.payload ?? '');
+        _dispatchPayload(response.payload);
       },
     );
     _initialized = true;
@@ -40,7 +52,26 @@ class IncomingCallBridge {
         await _notifications.getNotificationAppLaunchDetails();
     final payload = launchDetails?.notificationResponse?.payload;
     if (launchDetails?.didNotificationLaunchApp == true && payload != null) {
-      _publishIncomingCall(payload);
+      _dispatchPayload(payload);
+    }
+  }
+
+  void _dispatchPayload(String? payload) {
+    if (payload == null) return;
+    if (payload.startsWith(pushNotificationPayloadPrefix)) {
+      _publishNotificationTap(
+        payload.substring(pushNotificationPayloadPrefix.length),
+      );
+      return;
+    }
+    _publishIncomingCall(payload);
+  }
+
+  void _publishNotificationTap(String payload) {
+    if (_notificationTaps.hasListener) {
+      _notificationTaps.add(payload);
+    } else {
+      _pendingNotificationPayload = payload;
     }
   }
 

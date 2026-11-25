@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qa3ty_app/core/config/env.dart';
+import 'package:qa3ty_app/core/cubit/intro_app/intro_app_cubit.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/features/auth/export.dart';
+import 'package:qa3ty_app/features/intro/presentation/screens/force_update_screen.dart';
 import 'package:qa3ty_app/features/halls/presentation/screens/halls_home_screen.dart';
 import 'package:qa3ty_app/features/halls/presentation/screens/hall_form_screen.dart';
 import 'package:qa3ty_app/features/halls/presentation/cubits/halls_cubit.dart';
 import 'package:qa3ty_app/features/calendar/presentation/screens/monthly_calendar_screen.dart';
+import 'package:qa3ty_app/features/calendar/presentation/screens/events_calendar_screen.dart';
 import 'package:qa3ty_app/features/bookings/presentation/screens/booking_details_screen.dart';
 import 'package:qa3ty_app/features/bookings/presentation/screens/bookings_list_screen.dart';
 import 'package:qa3ty_app/features/bookings/presentation/screens/new_booking_stepper_screen.dart';
@@ -22,6 +25,8 @@ import 'package:qa3ty_app/features/inventory/presentation/screens/inventory_scre
 import 'package:qa3ty_app/features/workers/presentation/screens/workers_screen.dart';
 import 'package:qa3ty_app/features/reports/presentation/screens/reports_screen.dart';
 import 'package:qa3ty_app/features/notifications/presentation/screens/notifications_screen.dart';
+import 'package:qa3ty_app/features/notifications/presentation/screens/notification_details_screen.dart';
+import 'package:qa3ty_app/features/notifications/data/models/notification_model.dart';
 import 'package:qa3ty_app/features/settings/presentation/screens/settings_screen.dart';
 import 'package:qa3ty_app/features/more/presentation/screens/more_screen.dart';
 import 'package:qa3ty_app/features/sub_accounts/presentation/screens/sub_accounts_list_screen.dart';
@@ -46,11 +51,26 @@ class GoRouterRefreshStream extends ChangeNotifier {
 class AppRouter {
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: AppConfig.current.useMockData ? '/halls' : '/splash',
-    refreshListenable: GoRouterRefreshStream(ServicesLocator.authCubit.stream),
+    initialLocation:
+        AppConfig.current.useMockData ? '/halls' : '/splash?startup=1',
+    refreshListenable: Listenable.merge([
+      GoRouterRefreshStream(ServicesLocator.authCubit.stream),
+      GoRouterRefreshStream(ServicesLocator.introAppCubit.stream),
+    ]),
     redirect: (context, state) {
       final authState = ServicesLocator.authCubit.state;
       final loc = state.matchedLocation;
+      final isForceUpdateRequired =
+          ServicesLocator.introAppCubit.state is ForceUpdate;
+
+      if (isForceUpdateRequired) {
+        if (loc == '/splash' && state.uri.queryParameters['startup'] == '1') {
+          return null;
+        }
+        return loc == '/force-update' ? null : '/force-update';
+      }
+
+      if (loc == '/force-update') return '/splash?refresh=1';
 
       if (authState is AccountSuspendedState) {
         return loc == '/suspended' ? null : '/suspended';
@@ -66,10 +86,14 @@ class AppRouter {
       }
 
       if (authState is AuthInitial || authState is AuthLoading) {
-        return loc == '/splash' ? null : '/splash';
+        return loc == '/splash' || loc == '/login' ? null : '/splash';
       }
 
-      if (authState is Unauthenticated || authState is AuthErrorState) {
+      if (authState is AuthErrorState) {
+        return loc == '/login' || loc == '/splash' ? null : '/splash';
+      }
+
+      if (authState is Unauthenticated) {
         final isAuthRoute = loc == '/login' || loc == '/splash';
         return isAuthRoute ? null : '/login';
       }
@@ -102,6 +126,9 @@ class AppRouter {
             loc == '/login' ||
             loc == '/suspended' ||
             loc == '/subscription-expired') {
+          if (loc == '/splash' && state.uri.queryParameters['refresh'] == '1') {
+            return null;
+          }
           return '/halls';
         }
       }
@@ -114,6 +141,11 @@ class AppRouter {
         parentNavigatorKey: rootNavigatorKey,
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/force-update',
+        builder: (context, state) => const ForceUpdateScreen(),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
@@ -148,6 +180,27 @@ class AppRouter {
         builder: (context, state) => IncomingCallScreen(
           phone: state.uri.queryParameters['phone'] ?? '',
         ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/notification-details',
+        builder: (context, state) {
+          final extra = state.extra;
+          if (extra is AppNotification) {
+            return NotificationDetailsScreen(notification: extra);
+          }
+          final query = state.uri.queryParameters;
+          return NotificationDetailsScreen(
+            notification: AppNotification(
+              id: query['id'] ?? 'push-notification',
+              title: query['title'] ?? 'إشعار جديد',
+              message: query['message'] ?? '',
+              date: DateTime.tryParse(query['date'] ?? '') ?? DateTime.now(),
+              type: notificationTypeFrom(query['type'] ?? ''),
+              route: query['route'],
+            ),
+          );
+        },
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
@@ -223,12 +276,7 @@ class AppRouter {
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
         path: '/calendar',
-        redirect: (context, state) {
-          final hallId = state.uri.queryParameters['hallId'];
-          return hallId == null || hallId.isEmpty
-              ? '/halls'
-              : '/halls/$hallId/calendar';
-        },
+        builder: (context, state) => const EventsCalendarScreen(),
       ),
 
       // Halls Subroutes

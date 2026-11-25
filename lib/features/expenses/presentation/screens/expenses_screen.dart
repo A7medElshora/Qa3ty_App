@@ -11,6 +11,7 @@ import 'package:qa3ty_app/core/utils/widgets/circle_icon_button.dart';
 import 'package:qa3ty_app/core/utils/widgets/chips.dart';
 import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../../data/models/expense_model.dart';
+import '../widgets/expense_receipt_preview.dart';
 
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({super.key});
@@ -22,7 +23,9 @@ class ExpensesScreen extends StatefulWidget {
 class _ExpensesScreenState extends State<ExpensesScreen> {
   List<Expense> _expenses = [];
   bool _isLoading = true;
+  String? _loadError;
   String _selectedCategory = 'الكل';
+  bool _showRecentOnly = false;
 
   final List<String> _categories = [
     'الكل',
@@ -43,20 +46,37 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   Future<void> _fetchExpenses() async {
-    setState(() => _isLoading = true);
-    final data = await ServicesLocator.expensesRepo.getExpenses();
-    setState(() {
-      _expenses = data;
-      _isLoading = false;
-    });
+    if (mounted) setState(() => _isLoading = true);
+    try {
+      final data = await ServicesLocator.expensesRepo.getExpenses();
+      if (!mounted) return;
+      setState(() {
+        _expenses = data;
+        _loadError = null;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = error.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   int get _totalExpensesAmount =>
       _filteredExpenses.fold(0, (sum, e) => sum + e.amount);
 
   List<Expense> get _filteredExpenses {
-    if (_selectedCategory == 'الكل') return _expenses;
-    return _expenses.where((e) => e.category == _selectedCategory).toList();
+    final recentThreshold = DateTime.now().subtract(const Duration(days: 30));
+    return _expenses.where((expense) {
+      final matchesCategory =
+          _selectedCategory == 'الكل' || expense.category == _selectedCategory;
+      final matchesRecency = !_showRecentOnly ||
+          (!expense.date.isBefore(recentThreshold) &&
+              !expense.date.isAfter(DateTime.now()));
+      return matchesCategory && matchesRecency;
+    }).toList();
   }
 
   @override
@@ -98,11 +118,28 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     padding: const EdgeInsets.only(left: 8),
                     child: AppChip(
                       label: cat,
-                      isSelected: _selectedCategory == cat,
-                      onTap: () => setState(() => _selectedCategory = cat),
+                      isSelected: !_showRecentOnly && _selectedCategory == cat,
+                      onTap: () => setState(() {
+                        _selectedCategory = cat;
+                        _showRecentOnly = false;
+                      }),
                     ),
                   );
-                }).toList(),
+                }).toList()
+                  ..insert(
+                    1,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: AppChip(
+                        label: 'الأخيرة',
+                        isSelected: _showRecentOnly,
+                        onTap: () => setState(() {
+                          _selectedCategory = 'الكل';
+                          _showRecentOnly = true;
+                        }),
+                      ),
+                    ),
+                  ),
               ),
             ),
 
@@ -110,23 +147,29 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             Expanded(
               child: _isLoading
                   ? const AppListSkeleton(itemCount: 4)
-                  : _filteredExpenses.isEmpty
-                      ? const EmptyState(
-                          title: 'لا توجد مصروفات مسجلة',
-                          subtitle: 'اضغط على زر الإضافة لتسجيل مصروف جديد.',
+                  : _loadError != null
+                      ? ErrorState(
+                          message: _loadError!,
+                          onRetry: _fetchExpenses,
                         )
-                      : RefreshIndicator(
-                          onRefresh: _fetchExpenses,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.only(
-                                left: 16, right: 16, bottom: 80, top: 8),
-                            itemCount: _filteredExpenses.length,
-                            itemBuilder: (context, i) {
-                              final exp = _filteredExpenses[i];
-                              return _buildExpenseCard(context, exp);
-                            },
-                          ),
-                        ),
+                      : _filteredExpenses.isEmpty
+                          ? const EmptyState(
+                              title: 'لا توجد مصروفات مسجلة',
+                              subtitle:
+                                  'اضغط على زر الإضافة لتسجيل مصروف جديد.',
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _fetchExpenses,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.only(
+                                    left: 16, right: 16, bottom: 80, top: 8),
+                                itemCount: _filteredExpenses.length,
+                                itemBuilder: (context, i) {
+                                  final exp = _filteredExpenses[i];
+                                  return _buildExpenseCard(context, exp);
+                                },
+                              ),
+                            ),
             ),
           ],
         ),
@@ -169,7 +212,51 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             color: AppColors.red,
           ),
         ),
+        onTap: () => _showExpenseDetails(context, exp),
       ),
+    );
+  }
+
+  void _showExpenseDetails(BuildContext context, Expense expense) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(expense.title),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _detailRow('التصنيف', expense.category),
+              _detailRow('القاعة', expense.hallName),
+              _detailRow(
+                'التاريخ',
+                AppFormatters.formatDayMonth(expense.date),
+              ),
+              _detailRow('المبلغ', AppFormatters.formatMoney(expense.amount)),
+              if (expense.note?.isNotEmpty ?? false)
+                _detailRow('ملاحظات', expense.note!),
+              if (expense.receiptImagePath?.isNotEmpty ?? false) ...[
+                const SizedBox(height: 12),
+                ExpenseReceiptPreview(path: expense.receiptImagePath!),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text('$label: $value'),
     );
   }
 }

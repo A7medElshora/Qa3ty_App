@@ -124,7 +124,10 @@ class BookingCancellationResult {
 class ServiceItem {
   final String id;
   final String name;
+
+  /// Unit price. The line total is [price] multiplied by [quantity].
   final int price;
+  final int quantity;
   final String? note;
   final BookingServiceStatus status;
   final bool isCustom;
@@ -133,15 +136,19 @@ class ServiceItem {
     required this.id,
     required this.name,
     required this.price,
+    this.quantity = 1,
     this.note,
     required this.status,
     this.isCustom = false,
   });
 
+  int get totalPrice => price * quantity;
+
   ServiceItem copyWith({
     String? id,
     String? name,
     int? price,
+    int? quantity,
     String? note,
     BookingServiceStatus? status,
     bool? isCustom,
@@ -150,9 +157,39 @@ class ServiceItem {
       id: id ?? this.id,
       name: name ?? this.name,
       price: price ?? this.price,
+      quantity: quantity ?? this.quantity,
       note: note ?? this.note,
       status: status ?? this.status,
       isCustom: isCustom ?? this.isCustom,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'unit_price': price,
+        'quantity': quantity,
+        'status': status.name,
+        'note': note,
+        'is_custom': isCustom,
+      };
+
+  factory ServiceItem.fromJson(Map<String, dynamic> json) {
+    final statusName = json['status']?.toString();
+    final status = BookingServiceStatus.values.firstWhere(
+      (value) => value.name == statusName,
+      orElse: () => BookingServiceStatus.booked,
+    );
+    return ServiceItem(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      price: (json['unit_price'] as num?)?.round() ??
+          (json['price'] as num?)?.round() ??
+          0,
+      quantity: (json['quantity'] as num?)?.round() ?? 1,
+      note: json['note']?.toString(),
+      status: status,
+      isCustom: json['is_custom'] == true,
     );
   }
 }
@@ -222,7 +259,7 @@ class Booking {
   int get bookedServicesTotal {
     return services
         .where((s) => s.status == BookingServiceStatus.booked)
-        .fold(0, (sum, s) => sum + s.price);
+        .fold(0, (sum, s) => sum + s.totalPrice);
   }
 
   /// Total charges = hall price + booked services
@@ -319,4 +356,35 @@ class Booking {
       cancelledAt: cancelledAt ?? this.cancelledAt,
     );
   }
+}
+
+String buildBookingReceiptText(Booking booking) {
+  final services = booking.services
+      .where((service) => service.status == BookingServiceStatus.booked)
+      .map((service) {
+    return '${service.name}: ${service.quantity} × ${service.price} = ${service.totalPrice} ج.م';
+  }).join('\n');
+  final payments = List<LedgerEntry>.from(booking.payments)
+    ..sort((a, b) => a.date.compareTo(b.date));
+  final paymentsText = payments.map((payment) {
+    final type = payment.type == 'refund' ? 'استرداد' : 'دفعة';
+    return '$type ${payment.amount} ج.م · ${payment.paymentMethod} · '
+        '${payment.date.toIso8601String().substring(0, 10)}'
+        '${payment.note?.isNotEmpty == true ? ' · ${payment.note}' : ''}';
+  }).join('\n');
+
+  return [
+    'قاعات قاعتي | ${booking.hallName}',
+    'إيصال سداد رقم #${booking.id}',
+    'اسم العميل: ${booking.customerName}',
+    'رقم العميل: ${booking.customerPhone}',
+    'المناسبة: ${booking.eventType}',
+    'تاريخ الفعالية: ${booking.eventDate.toIso8601String().substring(0, 10)}',
+    'سعر القاعة: ${booking.hallPrice} ج.م',
+    if (services.isNotEmpty) 'الخدمات:\n$services',
+    'إجمالي العقد: ${booking.totalAmount} ج.م',
+    if (paymentsText.isNotEmpty) 'الدفعات:\n$paymentsText',
+    'إجمالي المسدد: ${booking.paidAmount} ج.م',
+    'المتبقي: ${booking.remainingAmount} ج.م',
+  ].join('\n');
 }

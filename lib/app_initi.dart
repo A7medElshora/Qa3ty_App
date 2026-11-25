@@ -28,7 +28,10 @@ Future<void> initializeApp() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  await PushNotificationsService.instance.initialize();
+  await PushNotificationsService.instance.initialize(
+    registerDeviceToken: (token) =>
+        ServicesLocator.notificationsRepo.registerDeviceToken(fcmToken: token),
+  );
   await CallMonitoringService.initialize();
 
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;

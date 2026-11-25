@@ -16,6 +16,7 @@ import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import '../../data/models/booking_model.dart';
 import '../../../customers/data/models/customer_model.dart';
 import '../../../halls/data/models/hall_model.dart';
+import '../../../calendar/presentation/widgets/hall_availability_date_picker.dart';
 
 class NewBookingStepperScreen extends StatefulWidget {
   final String? initialHallId;
@@ -57,10 +58,10 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   String _selectedEventType = 'حفل زفاف';
-  final _seatsController = TextEditingController(text: '٤٥٠');
+  final _seatsController = TextEditingController();
 
   // Step 4: Price & Deposit
-  final _priceController = TextEditingController(text: '40000');
+  final _priceController = TextEditingController();
   final _depositController = TextEditingController(text: '15000');
   final String _paymentMethod = 'نقداً';
 
@@ -74,18 +75,18 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
     'الجاتوه': false,
     'المشروبات': false,
   };
-  final Map<String, int> _servicePrices = {
-    'زفة استعراضية': 3000,
-    'دي جي وإضاءة': 5000,
-    'دبكة لبنانية': 4000,
-    'عروض ليزر شو': 2500,
-    'مؤثرات الدخان الثقيل': 1500,
-    'الجاتوه': 0,
-    'المشروبات': 0,
-  };
   final Map<String, TextEditingController> _servicePriceControllers = {
+    'زفة استعراضية': TextEditingController(),
+    'دي جي وإضاءة': TextEditingController(),
+    'دبكة لبنانية': TextEditingController(),
+    'عروض ليزر شو': TextEditingController(),
+    'مؤثرات الدخان الثقيل': TextEditingController(),
     'الجاتوه': TextEditingController(),
     'المشروبات': TextEditingController(),
+  };
+  final Map<String, TextEditingController> _serviceQuantityControllers = {
+    'الجاتوه': TextEditingController(text: '1'),
+    'المشروبات': TextEditingController(text: '1'),
   };
 
   // Step 6: Notes
@@ -153,17 +154,23 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
   int get _servicesTotal {
     int sum = 0;
     _selectedServices.forEach((service, isSelected) {
-      if (isSelected) sum += _servicePrice(service);
+      if (isSelected) sum += _servicePrice(service) * _serviceQuantity(service);
     });
     return sum;
   }
 
   int _servicePrice(String service) {
-    final controller = _servicePriceControllers[service];
-    if (controller != null) {
-      return int.tryParse(_normalizePhone(controller.text)) ?? 0;
-    }
-    return _servicePrices[service] ?? 0;
+    return int.tryParse(
+          _normalizePhone(_servicePriceControllers[service]?.text ?? ''),
+        ) ??
+        0;
+  }
+
+  int _serviceQuantity(String service) {
+    return int.tryParse(
+          _normalizePhone(_serviceQuantityControllers[service]?.text ?? '1'),
+        ) ??
+        1;
   }
 
   int get _totalAmount => _hallPrice + _servicesTotal;
@@ -183,6 +190,9 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
     _setupNotesController.dispose();
     _internalNotesController.dispose();
     for (final controller in _servicePriceControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _serviceQuantityControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -407,13 +417,15 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
             text: 'تغيير التاريخ من التقويم',
             height: 40,
             onPressed: () async {
-              final picked = await showDatePicker(
+              final picked = await showHallAvailabilityDatePicker(
                 context: context,
+                hallId: _selectedHallId,
                 initialDate: _selectedDate,
-                firstDate: DateTime(2026, 1, 1),
-                lastDate: DateTime(2028, 12, 31),
+                repository: ServicesLocator.calendarRepo,
               );
-              if (picked != null) setState(() => _selectedDate = picked);
+              if (picked != null && mounted) {
+                setState(() => _selectedDate = picked);
+              }
             },
           ),
           const SizedBox(height: 20),
@@ -467,6 +479,12 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
             hint: '٤٥٠',
             controller: _seatsController,
             keyboardType: TextInputType.number,
+            validator: (value) {
+              final seats = int.tryParse(_normalizePhone(value ?? '').trim());
+              return seats == null || seats <= 0
+                  ? 'أدخل عدد المقاعد (أكبر من صفر).'
+                  : null;
+            },
           ),
           const SizedBox(height: 14),
           const Align(
@@ -514,8 +532,15 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
         children: [
           AppTextField(
             label: 'سعر إيجار القاعة الأساسي (ج.م)',
+            hint: '40000',
             controller: _priceController,
             keyboardType: TextInputType.number,
+            validator: (value) {
+              final price = int.tryParse(_normalizePhone(value ?? '').trim());
+              return price == null || price < 0
+                  ? 'أدخل سعر القاعة (صفر أو أكثر).'
+                  : null;
+            },
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
@@ -580,9 +605,11 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
                 activeColor: AppColors.primary,
                 title: Text(service, style: AppTextStyles.body),
                 subtitle: Text(
-                  _servicePriceControllers.containsKey(service) && price == 0
-                      ? 'أدخل السعر المتفق عليه'
-                      : AppFormatters.formatMoney(price),
+                  _servicePriceControllers[service]?.text.trim().isEmpty == true
+                      ? 'أدخل سعر الوحدة المتفق عليه'
+                      : AppFormatters.formatMoney(
+                          price * _serviceQuantity(service),
+                        ),
                   style: const TextStyle(
                       color: AppColors.green, fontWeight: FontWeight.bold),
                 ),
@@ -593,16 +620,33 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
                   });
                 },
               ),
-              if (isSelected && _servicePriceControllers.containsKey(service))
+              if (isSelected)
                 Padding(
                   padding:
                       const EdgeInsets.only(bottom: 12, left: 16, right: 16),
-                  child: AppTextField(
-                    label: 'سعر $service',
-                    hint: 'أدخل السعر بالجنيه',
-                    controller: _servicePriceControllers[service],
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}),
+                  child: Column(
+                    children: [
+                      AppTextField(
+                        label: 'سعر الوحدة لـ $service',
+                        hint: 'أدخل السعر بالجنيه',
+                        controller: _servicePriceControllers[service],
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      if (_serviceQuantityControllers.containsKey(service))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: AppTextField(
+                            label: service == 'الجاتوه'
+                                ? 'عدد قطع الجاتوه'
+                                : 'عدد المشروبات',
+                            hint: 'أدخل الكمية',
+                            controller: _serviceQuantityControllers[service],
+                            keyboardType: TextInputType.number,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
             ],
@@ -697,20 +741,47 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
         );
         return;
       }
+      final seats =
+          int.tryParse(_normalizePhone(_seatsController.text.trim())) ?? 0;
+      if (seats <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('يرجى إدخال عدد مقاعد أكبر من صفر')),
+        );
+        return;
+      }
+    }
+
+    if (_currentStep == 3) {
+      final price = int.tryParse(_normalizePhone(_priceController.text.trim()));
+      if (price == null || price < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('يرجى إدخال سعر القاعة (صفر أو أكثر)')),
+        );
+        return;
+      }
     }
 
     if (_currentStep < _totalSteps - 1) {
       setState(() => _currentStep++);
     } else {
       final missingServicePrice = _servicePriceControllers.entries.any(
+        (entry) {
+          if (_selectedServices[entry.key] != true) return false;
+          final price = int.tryParse(_normalizePhone(entry.value.text.trim()));
+          return price == null || price < 0;
+        },
+      );
+      final invalidServiceQuantity = _serviceQuantityControllers.entries.any(
         (entry) =>
             _selectedServices[entry.key] == true &&
-            entry.value.text.trim().isEmpty,
+            _serviceQuantity(entry.key) < 1,
       );
-      if (missingServicePrice) {
+      if (missingServicePrice || invalidServiceQuantity) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('يرجى إدخال سعر الجاتوه والمشروبات المختارة'),
+            content: Text(
+              'يرجى إدخال سعر كل خدمة مختارة وكمية صحيحة للجاتوه والمشروبات',
+            ),
           ),
         );
         return;
@@ -726,6 +797,7 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
           id: 'serv_${e.key}',
           name: e.key,
           price: _servicePrice(e.key),
+          quantity: _serviceQuantity(e.key),
           status: e.value
               ? BookingServiceStatus.booked
               : BookingServiceStatus.optional,
@@ -744,7 +816,9 @@ class _NewBookingStepperScreenState extends State<NewBookingStepperScreen> {
           eventType: _selectedEventType,
           eventDate: _selectedDate,
           timeRange: _selectedTimeSlot,
-          seatsCount: int.tryParse(_seatsController.text.trim()) ?? 400,
+          seatsCount:
+              int.tryParse(_normalizePhone(_seatsController.text.trim())) ??
+                  450,
           hallPrice: _hallPrice,
           services: servicesList,
           payments: [

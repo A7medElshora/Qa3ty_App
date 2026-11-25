@@ -12,6 +12,7 @@ import 'package:qa3ty_app/core/utils/widgets/section_card.dart';
 import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import 'package:qa3ty_app/features/halls/data/models/hall_model.dart';
 import '../../data/models/expense_model.dart';
+import '../widgets/expense_receipt_preview.dart';
 
 class ExpenseFormScreen extends StatefulWidget {
   const ExpenseFormScreen({super.key});
@@ -31,6 +32,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   String? _hallsError;
   String? _receiptImagePath;
   bool _isLoading = false;
+  String? _saveError;
 
   final List<String> _categories = [
     'كهرباء',
@@ -141,8 +143,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                                   fontFamily: AppTextStyles.fontFamily,
                                 ),
                                 onSelected: (val) {
-                                  if (val)
+                                  if (val) {
                                     setState(() => _selectedCategory = cat);
+                                  }
                                 },
                               );
                             }).toList(),
@@ -221,6 +224,17 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                                 : 'إرفاق صورة الفاتورة / الإيصال',
                             onPressed: _pickReceiptImage,
                           ),
+                          if (_receiptImagePath != null) ...[
+                            const SizedBox(height: 12),
+                            ExpenseReceiptPreview(path: _receiptImagePath!),
+                          ],
+                          if (_saveError != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _saveError!,
+                              style: const TextStyle(color: AppColors.red),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -243,7 +257,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   Future<void> _pickReceiptImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() => _receiptImagePath = picked.path);
     }
   }
@@ -266,7 +280,10 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _saveError = null;
+    });
     final selectedHalls = _halls.where((hall) => hall.id == _selectedHallId);
     final selectedHall = _selectedHallId == 'all' || selectedHalls.isEmpty
         ? null
@@ -285,13 +302,21 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
           : _noteController.text.trim(),
     );
 
-    await ServicesLocator.expensesRepo.addExpense(expense);
-
-    if (mounted) {
-      context.pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تسجيل المصروف بنجاح')),
-      );
+    try {
+      await ServicesLocator.expensesRepo.addExpense(expense);
+      if (mounted) {
+        context.pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم تسجيل المصروف بنجاح')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _saveError = error.toString();
+        });
+      }
     }
   }
 }

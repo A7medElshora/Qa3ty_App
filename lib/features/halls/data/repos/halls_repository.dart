@@ -111,9 +111,23 @@ class RemoteHallsRepository implements HallsRepository {
         int weekBookings = 0;
         int weekRemaining = 0;
         var upcomingRemaining = 0;
+        var upcomingWeekEvents = 0;
         for (final event in calendarEvents.whereType<Map<String, dynamic>>()) {
           if (event['status'] != 'cancelled') {
             upcomingRemaining += bookingRemainingAmount(event).round();
+            final eventDate = DateTime.tryParse(
+              event['event_date']?.toString() ?? '',
+            );
+            final today = DateTime(now.year, now.month, now.day);
+            final lastUpcomingDay = today.add(const Duration(days: 7));
+            final eventDay = eventDate == null
+                ? null
+                : DateTime(eventDate.year, eventDate.month, eventDate.day);
+            if (eventDay != null &&
+                !eventDay.isBefore(today) &&
+                !eventDay.isAfter(lastUpcomingDay)) {
+              upcomingWeekEvents++;
+            }
           }
         }
 
@@ -207,6 +221,7 @@ class RemoteHallsRepository implements HallsRepository {
             weekBookingsCount: weekBookings,
             weekRemainingAmount: weekRemaining,
             upcomingRemainingAmount: upcomingRemaining,
+            upcomingWeekEventsCount: upcomingWeekEvents,
           ),
         );
       }
@@ -320,6 +335,7 @@ class MockHallsRepository implements HallsRepository {
       weekBookingsCount: 4,
       weekRemainingAmount: 45000,
       upcomingRemainingAmount: 45000,
+      upcomingWeekEventsCount: 4,
       currentWeekSchedule: [
         HallDaySchedule(
           dayNumber: 21,
@@ -382,6 +398,7 @@ class MockHallsRepository implements HallsRepository {
       weekBookingsCount: 2,
       weekRemainingAmount: 12000,
       upcomingRemainingAmount: 12000,
+      upcomingWeekEventsCount: 2,
       currentWeekSchedule: [
         HallDaySchedule(
           dayNumber: 21,

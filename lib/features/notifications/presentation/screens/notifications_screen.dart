@@ -19,6 +19,7 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<AppNotification> _notifications = [];
   bool _isLoading = true;
+  bool _loadFailed = false;
 
   @override
   void initState() {
@@ -28,11 +29,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _fetchNotifications() async {
     setState(() => _isLoading = true);
-    final data = await ServicesLocator.notificationsRepo.getNotifications();
-    setState(() {
-      _notifications = data;
-      _isLoading = false;
-    });
+    try {
+      final data = await ServicesLocator.notificationsRepo.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        _notifications = data;
+        _isLoading = false;
+        _loadFailed = false;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Could not load notifications: $error\n$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadFailed = true;
+      });
+    }
   }
 
   @override
@@ -67,24 +79,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             Expanded(
               child: _isLoading
                   ? const AppListSkeleton(itemCount: 4)
-                  : _notifications.isEmpty
-                      ? const EmptyState(
-                          title: 'لا توجد إشعارات جديدة',
-                          subtitle:
-                              'ستظهر هنا كافة تنبيهات الفعاليات والمبالغ المتبقية.',
+                  : _loadFailed
+                      ? ErrorState(
+                          message: 'تعذر تحميل الإشعارات حالياً.',
+                          onRetry: _fetchNotifications,
                         )
-                      : RefreshIndicator(
-                          onRefresh: _fetchNotifications,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.only(
-                                left: 16, right: 16, bottom: 80, top: 8),
-                            itemCount: _notifications.length,
-                            itemBuilder: (context, i) {
-                              final n = _notifications[i];
-                              return _buildNotificationCard(n);
-                            },
-                          ),
-                        ),
+                      : _notifications.isEmpty
+                          ? const EmptyState(
+                              title: 'لا توجد إشعارات جديدة',
+                              subtitle:
+                                  'ستظهر هنا كافة تنبيهات الفعاليات والمبالغ المتبقية.',
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _fetchNotifications,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.only(
+                                    left: 16, right: 16, bottom: 80, top: 8),
+                                itemCount: _notifications.length,
+                                itemBuilder: (context, i) {
+                                  final n = _notifications[i];
+                                  return _buildNotificationCard(n);
+                                },
+                              ),
+                            ),
             ),
           ],
         ),
@@ -131,11 +148,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       child: ListTile(
         onTap: () async {
-          await ServicesLocator.notificationsRepo.markAsRead(n.id);
-          _fetchNotifications();
-          if (n.route != null && mounted) {
-            context.push(n.route!);
+          var isRead = n.isRead;
+          if (!n.isRead) {
+            try {
+              await ServicesLocator.notificationsRepo.markAsRead(n.id);
+              isRead = true;
+            } catch (error, stackTrace) {
+              debugPrint(
+                'Could not mark notification as read: $error\n$stackTrace',
+              );
+            }
           }
+          if (!mounted) return;
+          final index = _notifications.indexWhere((item) => item.id == n.id);
+          if (index != -1 && isRead) {
+            setState(() {
+              _notifications[index] = n.copyWith(isRead: true);
+            });
+          }
+          context.push(
+            '/notification-details',
+            extra: n.copyWith(isRead: isRead),
+          );
         },
         leading: Container(
           width: 40,

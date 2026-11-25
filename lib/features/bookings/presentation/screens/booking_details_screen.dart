@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qa3ty_app/core/helpers/formatters.dart';
 import 'package:qa3ty_app/core/helpers/permission_guard.dart';
+import 'package:qa3ty_app/core/helpers/phone_number_normalizer.dart';
 import 'package:qa3ty_app/core/networking/api_exceptions.dart';
 import 'package:qa3ty_app/core/services/locator/get_it_locator.dart';
 import 'package:qa3ty_app/core/utils/constant/app_color.dart';
@@ -20,6 +21,7 @@ import 'package:qa3ty_app/core/utils/widgets/app_bottom_sheet.dart';
 import 'package:qa3ty_app/core/utils/widgets/app_text_field.dart';
 import 'package:qa3ty_app/core/utils/widgets/state_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import '../cubits/booking_details_cubit.dart';
 import '../widgets/add_payment_bottom_sheet.dart';
 import '../../data/models/booking_model.dart';
@@ -62,7 +64,7 @@ class BookingDetailsView extends StatelessWidget {
               return const AppSkeletonizer(
                 child: Column(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: SingleChildScrollView(
                         padding: EdgeInsets.only(
                           top: 52,
@@ -85,7 +87,7 @@ class BookingDetailsView extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const AppSkeletonPanel(height: 76, lineCount: 1),
+                    AppSkeletonPanel(height: 76, lineCount: 1),
                   ],
                 ),
               );
@@ -501,14 +503,7 @@ class BookingDetailsView extends StatelessWidget {
     BuildContext context,
     String rawPhone,
   ) async {
-    final trimmedPhone = rawPhone.trim();
-    var phone = trimmedPhone.replaceAll(RegExp(r'\D'), '');
-    if (phone.startsWith('00')) {
-      phone = phone.substring(2);
-    } else if (!trimmedPhone.startsWith('+')) {
-      if (phone.startsWith('0')) phone = phone.substring(1);
-      if (!phone.startsWith('20')) phone = '20$phone';
-    }
+    final phone = normalizePhoneNumberForWhatsApp(rawPhone);
 
     if (phone.isEmpty) {
       _showContactMessage(context, 'رقم هاتف العميل غير متوفر');
@@ -523,6 +518,31 @@ class BookingDetailsView extends StatelessWidget {
       if (!launched) {
         _showContactMessage(context, 'تعذر فتح واتساب');
       }
+    } on PlatformException {
+      if (context.mounted) {
+        _showContactMessage(context, 'تعذر فتح واتساب');
+      }
+    }
+  }
+
+  Future<void> _shareReceiptOnWhatsApp(
+    BuildContext context,
+    Booking booking,
+  ) async {
+    final phone = normalizePhoneNumberForWhatsApp(booking.customerPhone);
+    if (phone.isEmpty) {
+      _showContactMessage(context, 'رقم هاتف العميل غير متوفر');
+      return;
+    }
+
+    final uri = Uri.https('wa.me', '/$phone', {
+      'text': buildBookingReceiptText(booking),
+    });
+    try {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!context.mounted) return;
+      if (!launched) _showContactMessage(context, 'تعذر فتح واتساب');
     } on PlatformException {
       if (context.mounted) {
         _showContactMessage(context, 'تعذر فتح واتساب');
@@ -743,7 +763,7 @@ class BookingDetailsView extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${AppFormatters.formatMoney(service.price)}${service.note != null ? " · ${service.note}" : ""}',
+                              '${service.quantity > 1 ? '${service.quantity} × ${AppFormatters.formatMoney(service.price)} = ' : ''}${AppFormatters.formatMoney(service.totalPrice)}${service.note != null ? " · ${service.note}" : ""}',
                               style: AppTextStyles.muted,
                             ),
                           ],
@@ -1174,6 +1194,40 @@ class BookingDetailsView extends StatelessWidget {
                 KeyValueRow(
                     label: 'تاريخ الفعالية',
                     value: AppFormatters.formatDayMonth(booking.eventDate)),
+                if (booking.services.any((service) =>
+                    service.status == BookingServiceStatus.booked)) ...[
+                  const Divider(height: 20, color: AppColors.line),
+                  const Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text('الخدمات', style: AppTextStyles.cardTitle),
+                  ),
+                  ...booking.services
+                      .where((service) =>
+                          service.status == BookingServiceStatus.booked)
+                      .map(
+                        (service) => KeyValueRow(
+                          label:
+                              '${service.name} (${service.quantity} × ${AppFormatters.formatMoney(service.price)})',
+                          value: AppFormatters.formatMoney(
+                            service.totalPrice,
+                          ),
+                        ),
+                      ),
+                ],
+                if (booking.payments.isNotEmpty) ...[
+                  const Divider(height: 20, color: AppColors.line),
+                  const Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text('الدفعات', style: AppTextStyles.cardTitle),
+                  ),
+                  ...booking.payments.map(
+                    (payment) => KeyValueRow(
+                      label:
+                          '${AppFormatters.formatDayMonth(payment.date)} · ${payment.paymentMethod}${payment.note?.isNotEmpty == true ? ' · ${payment.note}' : ''}',
+                      value: AppFormatters.formatMoney(payment.amount),
+                    ),
+                  ),
+                ],
                 KeyValueRow(
                     label: 'إجمالي العقد',
                     value: AppFormatters.formatMoney(booking.totalAmount)),
@@ -1192,15 +1246,37 @@ class BookingDetailsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          AppSecondaryButton(
+            text: 'إرسال الإيصال لرقم العميل على واتساب',
+            borderColor: AppColors.green,
+            textColor: AppColors.green,
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _shareReceiptOnWhatsApp(context, booking);
+            },
+          ),
+          const SizedBox(height: 8),
           AppPrimaryButton(
-            text: 'مشاركة عبر واتساب أو تطبيقات أخرى',
+            text: 'مشاركة عبر تطبيقات أخرى',
             icon: const Icon(LucideIcons.share2,
                 size: 18, color: AppColors.white),
-            onPressed: () {
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.maybeOf(context);
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تم تجهيز صورة الإيصال للمشاركة')),
-              );
+              try {
+                await SharePlus.instance.share(
+                  ShareParams(
+                    subject: 'إيصال حجز ${booking.id}',
+                    text: buildBookingReceiptText(booking),
+                  ),
+                );
+              } catch (_) {
+                if (context.mounted) {
+                  messenger?.showSnackBar(
+                    const SnackBar(content: Text('تعذرت مشاركة الإيصال.')),
+                  );
+                }
+              }
             },
           ),
         ],

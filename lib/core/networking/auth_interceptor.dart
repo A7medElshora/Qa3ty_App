@@ -1,24 +1,36 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:qa3ty_app/core/networking/token_storage.dart';
 
 typedef SessionExpiredCallback = void Function();
 typedef SubscriptionExpiredCallback = void Function(String message);
 
-enum _TokenRefreshResult { refreshed, failed, subscriptionExpired }
+enum _TokenRefreshResult {
+  refreshed,
+  failed,
+  unavailable,
+  subscriptionExpired,
+}
+
+typedef RefreshDioFactory = Dio Function(BaseOptions options);
 
 class AuthInterceptor extends QueuedInterceptor {
   final TokenStorage tokenStorage;
   final Dio dio;
   final SessionExpiredCallback? onSessionExpired;
   final SubscriptionExpiredCallback? onSubscriptionExpired;
+  final RefreshDioFactory _refreshDioFactory;
 
   AuthInterceptor({
     required this.tokenStorage,
     required this.dio,
     this.onSessionExpired,
     this.onSubscriptionExpired,
-  });
+    RefreshDioFactory? refreshDioFactory,
+  }) : _refreshDioFactory = refreshDioFactory ?? _createRefreshDio;
+
+  static Dio _createRefreshDio(BaseOptions options) => Dio(options);
 
   Completer<_TokenRefreshResult>? _refreshCompleter;
 
@@ -63,8 +75,9 @@ class AuthInterceptor extends QueuedInterceptor {
       return handler.next(err);
     }
 
-    // Only attempt refresh on 401 and not on auth endpoints
-    if (response?.statusCode == 401 && !path.contains('/auth/')) {
+    final isLoginOrRefreshEndpoint =
+        path.contains('/auth/login') || path.contains('/auth/refresh');
+    if (response?.statusCode == 401 && !isLoginOrRefreshEndpoint) {
       // Prevent multiple concurrent refreshes using a Completer lock
       final completer = _refreshCompleter ?? Completer<_TokenRefreshResult>();
       if (_refreshCompleter == null) {
@@ -104,8 +117,15 @@ class AuthInterceptor extends QueuedInterceptor {
         // Refresh failed: clear storage and notify AuthCubit
         await tokenStorage.clearAll();
         onSessionExpired?.call();
-      } else {
-        await tokenStorage.clearAll();
+      } else if (refreshResult == _TokenRefreshResult.unavailable) {
+        return handler.next(
+          DioException(
+            requestOptions: err.requestOptions,
+            type: DioExceptionType.connectionError,
+            error: err,
+            message: 'Could not verify the saved session with the server.',
+          ),
+        );
       }
     }
 
@@ -120,7 +140,7 @@ class AuthInterceptor extends QueuedInterceptor {
       }
 
       // Create a fresh lightweight Dio instance to avoid interceptor recursion
-      final refreshDio = Dio(BaseOptions(
+      final refreshDio = _refreshDioFactory(BaseOptions(
         baseUrl: dio.options.baseUrl,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
@@ -170,9 +190,14 @@ class AuthInterceptor extends QueuedInterceptor {
         onSubscriptionExpired?.call(expiredMessage);
         return _TokenRefreshResult.subscriptionExpired;
       }
-      return _TokenRefreshResult.failed;
-    } catch (_) {
-      return _TokenRefreshResult.failed;
+      if (error.response?.statusCode == 401 ||
+          error.response?.statusCode == 403) {
+        return _TokenRefreshResult.failed;
+      }
+      return _TokenRefreshResult.unavailable;
+    } catch (error, stackTrace) {
+      debugPrint('Unexpected token refresh failure: $error\n$stackTrace');
+      return _TokenRefreshResult.unavailable;
     }
     return _TokenRefreshResult.failed;
   }

@@ -65,41 +65,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
         top: false,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(
-                  top: 52, left: 16, right: 16, bottom: 8),
+            const Padding(
+              padding: EdgeInsets.only(top: 52, left: 16, right: 16, bottom: 8),
               child: AppHeader(
                 title: 'الإعدادات والاشتراك',
                 subtitle: 'إدارة حساب المنشأة وتفاصيل الباقة والتنبيهات',
                 showBackButton: false,
                 actions: [
                   // Experimental Data Badge
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.amberBg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.amber, width: 1.0),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.flaskConical,
-                            size: 12, color: AppColors.amberText),
-                        SizedBox(width: 4),
-                        Text(
-                          'بيانات تجريبية',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.fontFamily,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.amberText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // Container(
+                  //   padding:
+                  //       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  //   decoration: BoxDecoration(
+                  //     color: AppColors.amberBg,
+                  //     borderRadius: BorderRadius.circular(10),
+                  //     border: Border.all(color: AppColors.amber, width: 1.0),
+                  //   ),
+                  //   child: const Row(
+                  //     mainAxisSize: MainAxisSize.min,
+                  //     children: [
+                  //       Icon(LucideIcons.flaskConical,
+                  //           size: 12, color: AppColors.amberText),
+                  //       SizedBox(width: 4),
+                  //       Text(
+                  //         'بيانات تجريبية',
+                  //         style: TextStyle(
+                  //           fontFamily: AppTextStyles.fontFamily,
+                  //           fontSize: 10,
+                  //           fontWeight: FontWeight.w700,
+                  //           color: AppColors.amberText,
+                  //         ),
+                  //       ),
+                  //     ],
+                  //   ),
+                  // ),
                 ],
               ),
             ),
@@ -200,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 SwitchListTile(
                                   contentPadding: EdgeInsets.zero,
                                   title: const Text(
-                                      'تنبيهات الفعاليات القادمة (قبل ٤٨ ساعة)',
+                                      'تنبيهات الفعاليات القادمة (قبل 72 ساعة)',
                                       style: AppTextStyles.body),
                                   value: _notifEvents,
                                   activeTrackColor: AppColors.primary,

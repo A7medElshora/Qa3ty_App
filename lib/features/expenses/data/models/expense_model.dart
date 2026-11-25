@@ -4,7 +4,8 @@ import 'package:qa3ty_app/core/networking/api_exceptions.dart';
 class Expense {
   final String id;
   final String title;
-  final String category; // كهرباء, مياه, صيانة, بنزين, مواصلات, نظافة, مستلزمات, أخرى
+  final String
+      category; // كهرباء, مياه, صيانة, بنزين, مواصلات, نظافة, مستلزمات, أخرى
   final String hallId; // or 'all' for general expense
   final String hallName;
   final int amount;
@@ -68,7 +69,8 @@ class RemoteExpensesRepository implements ExpensesRepository {
     if (_categoryNameToId != null) return;
     try {
       final response = await _dio.get('/expense-categories');
-      if (response.data is Map<String, dynamic> && response.data['data'] is List) {
+      if (response.data is Map<String, dynamic> &&
+          response.data['data'] is List) {
         final list = response.data['data'] as List<dynamic>;
         _categoryNameToId = {};
         for (final item in list) {
@@ -92,7 +94,8 @@ class RemoteExpensesRepository implements ExpensesRepository {
       List<dynamic> items = [];
       if (response.data is Map<String, dynamic>) {
         final data = response.data as Map<String, dynamic>;
-        if (data['data'] is Map<String, dynamic> && data['data']['items'] is List) {
+        if (data['data'] is Map<String, dynamic> &&
+            data['data']['items'] is List) {
           items = data['data']['items'] as List<dynamic>;
         } else if (data['data'] is List) {
           items = data['data'] as List<dynamic>;
@@ -101,17 +104,29 @@ class RemoteExpensesRepository implements ExpensesRepository {
 
       final fetched = items.whereType<Map<String, dynamic>>().map((json) {
         final dateStr = json['expense_date']?.toString();
-        final date = dateStr != null ? (DateTime.tryParse(dateStr) ?? DateTime.now()) : DateTime.now();
+        final date = dateStr != null
+            ? (DateTime.tryParse(dateStr) ?? DateTime.now())
+            : DateTime.now();
         final amount = (json['amount'] as num?)?.round() ?? 0;
+        final categoryRelation = json['expense_categories'];
+        final category = json['category_name']?.toString() ??
+            (categoryRelation is Map
+                ? categoryRelation['name']?.toString()
+                : null) ??
+            'أخرى';
+        final receiptPath =
+            json['receipt_url']?.toString() ?? json['receipt_path']?.toString();
 
         return Expense(
           id: json['id']?.toString() ?? '',
           title: json['description']?.toString() ?? 'مصروف',
-          category: json['category_name']?.toString() ?? 'أخرى',
+          category: category,
           hallId: json['hall_id']?.toString() ?? 'all',
           hallName: json['hall_name']?.toString() ?? 'عام لجميع القاعات',
           amount: amount,
           date: date,
+          receiptImagePath:
+              receiptPath == null || receiptPath.isEmpty ? null : receiptPath,
           note: json['notes']?.toString(),
         );
       }).toList();
@@ -129,30 +144,45 @@ class RemoteExpensesRepository implements ExpensesRepository {
       String? catId = _categoryNameToId?[expense.category];
 
       // If category not found, create it via POST /expense-categories
-      if (catId == null && expense.category.isNotEmpty && expense.category != 'الكل') {
+      if (catId == null &&
+          expense.category.isNotEmpty &&
+          expense.category != 'الكل') {
         try {
-          final catRes = await _dio.post('/expense-categories', data: {'name': expense.category});
-          if (catRes.data is Map<String, dynamic> && catRes.data['data'] is Map<String, dynamic>) {
+          final catRes = await _dio
+              .post('/expense-categories', data: {'name': expense.category});
+          if (catRes.data is Map<String, dynamic> &&
+              catRes.data['data'] is Map<String, dynamic>) {
             catId = catRes.data['data']['id']?.toString();
             if (catId != null) _categoryNameToId![expense.category] = catId;
           }
         } catch (_) {}
       }
 
-      final dateStr = '${expense.date.year}-${expense.date.month.toString().padLeft(2, '0')}-${expense.date.day.toString().padLeft(2, '0')}';
+      final dateStr =
+          '${expense.date.year}-${expense.date.month.toString().padLeft(2, '0')}-${expense.date.day.toString().padLeft(2, '0')}';
 
-      await _dio.post(
-        '/expenses',
-        data: {
-          if (catId != null) 'category_id': catId,
-          'description': expense.title,
-          'amount': expense.amount.toDouble(),
-          'expense_date': dateStr,
-          if (expense.hallId.isNotEmpty && expense.hallId != 'all' && expense.hallId.length > 10)
-            'hall_id': expense.hallId,
-          'notes': expense.note,
-        },
-      );
+      final fields = <String, dynamic>{
+        if (catId != null) 'category_id': catId,
+        'description': expense.title,
+        'amount': expense.amount.toDouble(),
+        'expense_date': dateStr,
+        if (expense.hallId.isNotEmpty &&
+            expense.hallId != 'all' &&
+            expense.hallId.length > 10)
+          'hall_id': expense.hallId,
+        'notes': expense.note,
+      };
+      final path = expense.receiptImagePath;
+      if (path == null || path.isEmpty) {
+        await _dio.post('/expenses', data: fields);
+      } else {
+        fields['receipt'] = await MultipartFile.fromFile(path);
+        await _dio.post(
+          '/expenses',
+          data: FormData.fromMap(fields),
+          options: Options(contentType: Headers.multipartFormDataContentType),
+        );
+      }
     } on DioException catch (e) {
       throw ApiException.fromDioError(e);
     }

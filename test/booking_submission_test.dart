@@ -145,6 +145,38 @@ void main() {
     expect(adapter.requestUri, '/bookings/$_bookingUuid/payments');
   });
 
+  test('booking sends empty notes as a string when none were entered',
+      () async {
+    final adapter = _JsonResponseAdapter(
+      '{"success":true,"data":{"id":"$_bookingUuid"}}',
+    );
+    final repository = RemoteBookingsRepository(
+      Dio(BaseOptions(baseUrl: 'https://test.example'))
+        ..httpClientAdapter = adapter,
+    );
+    final booking = Booking(
+      id: 1002,
+      hallId: _hallId,
+      hallName: 'قاعة الاختبار',
+      customerId: _customerId,
+      customerName: 'محمد',
+      customerPhone: '01000000000',
+      eventType: 'حفل زفاف',
+      eventDate: DateTime(2026, 12, 24),
+      timeRange: '٦:٠٠ م – ١١:٠٠ م',
+      seatsCount: 300,
+      hallPrice: 40000,
+      services: const [],
+      payments: const [],
+    );
+
+    await repository.addBooking(booking);
+
+    final payload = jsonDecode(adapter.requestBody!) as Map<String, dynamic>;
+    expect(payload['notes'], '');
+    expect(payload['notes'], isA<String>());
+  });
+
   test('calendar reload shows the event as deposit after cache invalidation',
       () async {
     final adapter = _JsonResponseAdapter('{"success":true,"data":[]}');

@@ -93,7 +93,26 @@ class BookingDetailsCubit extends Cubit<BookingDetailsState> {
         refundMethod: refundMethod,
         refundNotes: refundNotes,
       );
-      await loadBooking(current.id);
+      final cancelledAt = result.cancelledAt ?? DateTime.now();
+      emit(
+        BookingDetailsLoaded(
+          current.copyWith(
+            status: BookingLifecycleStatus.cancelled,
+            cancellationReason: result.reason ?? reason,
+            refundAmount: result.refundAmount,
+            retainedAmount: result.retainedAmount,
+            refundStatus: result.refundStatus,
+            refundMethod: result.refundMethod,
+            refundNotes: result.refundNotes,
+            cancelledAt: cancelledAt,
+            activityLog: [
+              'تم إلغاء الحجز بتاريخ ${cancelledAt.toIso8601String().substring(0, 10)}. السبب: ${result.reason ?? reason}',
+              'المبلغ المسترد: ${result.refundAmount} ج.م، والمبلغ المحتفظ به: ${result.retainedAmount} ج.م.',
+              ...current.activityLog,
+            ],
+          ),
+        ),
+      );
       return result;
     }
     return null;
